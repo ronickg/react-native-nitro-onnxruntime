@@ -1,0 +1,17 @@
+{
+  "cxxNamespace": ["nitroonnxruntime"],
+  "ios": {
+    "iosModuleName": "NitroOnnxruntime"
+  },
+  "android": {
+    "androidNamespace": ["nitroonnxruntime"],
+    "androidCxxLibName": "nitroonnxruntime"
+  },
+  "autolinking": {
+    "NitroOnnxruntime": {
+      "swift": "NitroOnnxruntime",
+      "kotlin": "NitroOnnxruntime"
+    }
+  },
+  "ignorePaths": ["node_modules"]
+}
