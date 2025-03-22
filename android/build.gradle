@@ -138,9 +138,63 @@ repositories {
 
 def kotlin_version = getExtOrDefault("kotlinVersion")
 
+configurations {
+    extractHeaders
+    extractJNI
+}
+
 dependencies {
   implementation "com.facebook.react:react-android"
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
   implementation project(":react-native-nitro-modules")
+
+  extractHeaders "com.microsoft.onnxruntime:onnxruntime-android:1.21.0"
+  extractJNI "com.microsoft.onnxruntime:onnxruntime-android:1.21.0"
 }
 
+// Task to extract headers from the AAR
+task extractAARHeaders {
+    doLast {
+        configurations.extractHeaders.files.each {
+            def file = it.absoluteFile
+            copy {
+                from zipTree(file)
+                into "$buildDir/onnxruntime-headers"
+                include "headers/**/*"  // Extract the headers/ directory from the AAR
+            }
+        }
+    }
+}
+
+// Task to extract JNI libraries from the AAR
+task extractJNIFiles {
+    doLast {
+        configurations.extractJNI.files.each {
+            def file = it.absoluteFile
+            copy {
+                from zipTree(file)
+                into "$buildDir/onnxruntime-jni"
+                include "jni/**/*"
+            }
+        }
+    }
+}
+
+// Ensure the JNI extraction runs after the headers extraction
+extractJNIFiles.mustRunAfter extractAARHeaders
+
+// Make native build tasks depend on the extraction tasks
+def nativeBuildDependsOn(dependsOnTask, variant) {
+    def buildTasks = tasks.findAll({ task ->
+        !task.name.contains("Clean") && (task.name.contains("externalNative") || task.name.contains("CMake"))
+    })
+    if (variant != null) {
+        buildTasks = buildTasks.findAll({ task -> task.name.contains(variant) })
+    }
+    buildTasks.forEach { task -> task.dependsOn(dependsOnTask) }
+}
+
+afterEvaluate {
+    nativeBuildDependsOn(extractAARHeaders, null)
+    nativeBuildDependsOn(extractJNIFiles, null)
+}

@@ -1,9 +1,12 @@
 import { NitroModules } from 'react-native-nitro-modules';
-import type { NitroOnnxruntime } from './NitroOnnxruntime.nitro';
+import type { Onnxruntime } from './Onnxruntime.nitro';
+export * from './Onnxruntime.nitro';
 
-const NitroOnnxruntimeHybridObject =
-  NitroModules.createHybridObject<NitroOnnxruntime>('NitroOnnxruntime');
+// const OnnxruntimeHybridObject =
+//   NitroModules.createHybridObject<Onnxruntime>('Onnxruntime');
 
-export function multiply(a: number, b: number): number {
-  return NitroOnnxruntimeHybridObject.multiply(a, b);
-}
+// export function getVersion(): string {
+//   return OnnxruntimeHybridObject.getVersion();
+// }
+
+export const ort = NitroModules.createHybridObject<Onnxruntime>('Onnxruntime');

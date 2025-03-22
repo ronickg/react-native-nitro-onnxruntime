@@ -1,0 +1,32 @@
+#pragma once
+
+#include "HybridOnnxruntimeSpec.hpp"
+#include "InferenceSession.hpp"
+#include <onnxruntime_cxx_api.h>
+#include <memory>
+#include <unordered_map>
+
+namespace margelo::nitro::nitroonnxruntime
+{
+
+  class Onnxruntime : public virtual HybridOnnxruntimeSpec
+  {
+  public:
+    // Constructor
+    Onnxruntime() : HybridObject(TAG), env_(Ort::Env(ORT_LOGGING_LEVEL_WARNING, "Onnxruntime")) {}
+
+    // Destructor
+    ~Onnxruntime() override = default;
+
+  public:
+    // Implementation of pure virtual methods from spec
+    std::string getVersion() override;
+    std::shared_ptr<Promise<std::shared_ptr<HybridInferenceSessionSpec>>> loadModel(const std::string &modelPath) override;
+    std::shared_ptr<Promise<std::shared_ptr<HybridInferenceSessionSpec>>> loadModelFromBuffer(const std::shared_ptr<ArrayBuffer> &buffer) override;
+
+  private:
+    // ONNX Runtime environment (shared across sessions)
+    Ort::Env env_;
+  };
+
+} // namespace margelo::nitro::nitroonnxruntime

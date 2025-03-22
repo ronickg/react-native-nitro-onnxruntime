@@ -8,9 +8,11 @@
     "androidCxxLibName": "nitroonnxruntime"
   },
   "autolinking": {
-    "NitroOnnxruntime": {
-      "swift": "NitroOnnxruntime",
-      "kotlin": "NitroOnnxruntime"
+    "Onnxruntime": {
+      "cpp": "Onnxruntime"
+    },
+    "InferenceSession": {
+      "cpp": "InferenceSession"
     }
   },
   "ignorePaths": ["node_modules"]
