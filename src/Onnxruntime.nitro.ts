@@ -1,16 +1,17 @@
 import type { HybridObject } from 'react-native-nitro-modules';
-export interface EncodedTensor {
+// import type { InferenceSession as OnnxRuntimeInferenceSession } from 'onnxruntime-common';
+export interface Tensor {
   readonly dims: readonly number[];
   readonly type: string;
-  readonly data: ArrayBuffer;
+  readonly name: string;
 }
 export interface InferenceSession
   extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
   readonly key: string;
-  readonly inputNames: string[];
-  readonly outputNames: string[];
+  readonly inputNames: Tensor[];
+  readonly outputNames: Tensor[];
   run(
-    feeds: Record<string, EncodedTensor>
+    feeds: Record<string, ArrayBuffer>
     // options: RunOptions
   ): Promise<Record<string, ArrayBuffer>>;
   close(): Promise<void>;
@@ -30,6 +31,6 @@ export interface Onnxruntime
 
   loadModelFromBuffer(
     buffer: ArrayBuffer
-    // options?: SessionOptions
+    // options?: OnnxRuntimeInferenceSession.SessionOptions
   ): Promise<InferenceSession>;
 }

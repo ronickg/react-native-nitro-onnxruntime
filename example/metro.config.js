@@ -18,5 +18,6 @@ const config = getConfig(getDefaultConfig(__dirname), {
 });
 
 config.resolver.assetExts.push('onnx');
+config.resolver.assetExts.push('tflite');
 
 module.exports = config;

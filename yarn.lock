@@ -10677,6 +10677,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-native-fast-tflite@https://github.com/mrousavy/react-native-fast-tflite":
+  version: 1.6.0
+  resolution: "react-native-fast-tflite@https://github.com/mrousavy/react-native-fast-tflite.git#commit=e167b93795e05435f9ed11a6afdf3bd4aa445b87"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+  checksum: 3c12cd0267ea0b92169f4e9d2095bddb449d972cfb88943b7da0306bc2cb37b1c93a92a0f67231d55da0c1850cac2c8ad8075b8c37ae173087a4dec0de86e7c5
+  languageName: node
+  linkType: hard
+
 "react-native-fs@npm:^2.20.0":
   version: 2.20.0
   resolution: "react-native-fs@npm:2.20.0"
@@ -10720,6 +10730,7 @@ __metadata:
     react: 19.0.0
     react-native: 0.78.1
     react-native-builder-bob: ^0.38.0
+    react-native-fast-tflite: "https://github.com/mrousavy/react-native-fast-tflite"
     react-native-fs: ^2.20.0
     react-native-nitro-modules: ^0.22.1
   languageName: unknown

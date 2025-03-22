@@ -28,17 +28,17 @@ namespace margelo::nitro::nitroonnxruntime
   public:
     // Implementation of pure virtual methods from spec
     std::string getKey() override;
-    std::vector<std::string> getInputNames() override;
-    std::vector<std::string> getOutputNames() override;
+    std::vector<Tensor> getInputNames() override;
+    std::vector<Tensor> getOutputNames() override;
     std::shared_ptr<Promise<std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>>>> run(
-        const std::unordered_map<std::string, EncodedTensor> &feeds) override;
+        const std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> &feeds) override;
     std::shared_ptr<Promise<void>> close() override;
 
   private:
     std::unique_ptr<Ort::Session> session_;
     std::string key_;
-    std::vector<std::string> inputNames_;
-    std::vector<std::string> outputNames_;
+    std::vector<Tensor> inputNames_;
+    std::vector<Tensor> outputNames_;
 
     void initializeIONames();
   };
