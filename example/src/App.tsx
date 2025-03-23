@@ -1,493 +1,425 @@
 import {
   Button,
-  // Image,
-  PermissionsAndroid,
+  Platform,
+  ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
 import ort from 'react-native-nitro-onnxruntime';
-
-// import ortD from 'react-native-nitro-onnxruntime';
 import RNFS from 'react-native-fs';
 // @ts-ignore
 import { InferenceSession as OnnxRuntimeInferenceSession } from 'onnxruntime-react-native';
+// @ts-ignore
 import { Tensor } from 'onnxruntime-common';
 import { loadTensorflowModel } from 'react-native-fast-tflite';
+import { useState, useEffect } from 'react';
+
+const ModelPath = {
+  YOLOV5: `${RNFS.DocumentDirectoryPath}/yolov5s.onnx`,
+  YOLOV5_TFLITE: `${RNFS.DocumentDirectoryPath}/yolov5s-fp16.tflite`,
+};
 
 export default function App() {
-  const requestStoragePermission = async () => {
-    try {
-      const granted = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+  const [results, setResults] = useState<{ [key: string]: string }>({});
+  const [modelOptions, setModelOptions] = useState({
+    // iOS CoreML options
+    useCoreML: false,
+    useCPUOnly: false,
+    useCPUAndGPU: false,
+    enableOnSubgraph: false,
+    onlyEnableDeviceWithANE: false,
+
+    // Android NNAPI options
+    useNNAPI: false,
+    useFP16: false,
+    useNCHW: false,
+    cpuDisabled: false,
+    cpuOnly: false,
+  });
+
+  const toggleOption = (option: keyof typeof modelOptions) => {
+    setModelOptions((prev) => ({ ...prev, [option]: !prev[option] }));
+  };
+
+  const logResult = (key: string, value: string) => {
+    setResults((prev) => ({ ...prev, [key]: value }));
+  };
+
+  // Check if models exist
+  useEffect(() => {
+    const checkModels = async () => {
+      const modelsStatus = await Promise.all([
+        RNFS.exists(ModelPath.YOLOV5),
+        RNFS.exists(ModelPath.YOLOV5_TFLITE),
       ]);
 
-      if (
-        granted['android.permission.READ_EXTERNAL_STORAGE'] ===
-          PermissionsAndroid.RESULTS.GRANTED &&
-        granted['android.permission.WRITE_EXTERNAL_STORAGE'] ===
-          PermissionsAndroid.RESULTS.GRANTED
-      ) {
-        console.log('Storage permissions granted');
-        await loadModel();
-      } else {
-        console.log('Storage permissions denied');
-      }
-    } catch (err) {
-      console.warn(err);
+      logResult(
+        'Models Status',
+        `YOLOv5 ONNX: ${modelsStatus[0] ? '✓' : '✗'}, YOLOv5 TFLite: ${modelsStatus[1] ? '✓' : '✗'}`
+      );
+    };
+
+    checkModels();
+  }, []);
+
+  // Test 1: Load model from local file (require)
+  const testLoadFromRequire = async () => {
+    try {
+      logResult('Load Model', 'Loading YOLOv5 from require...');
+      const start = performance.now();
+
+      // Note: In a real app, you would have the model in your assets
+      await ort.loadModel(require('./yolov5s.onnx'));
+
+      const end = performance.now();
+      logResult(
+        'Load from require',
+        `Loaded in ${(end - start).toFixed(2)} ms`
+      );
+    } catch (error) {
+      logResult('Load from require', `Error: ${(error as Error).message}`);
     }
   };
 
-  const loadModel = async () => {
+  // Test 2: Load model from URL (remote or file://)
+  const testLoadFromURL = async () => {
     try {
-      // testAssetManager(require('./model.onnx'));
+      logResult('Load Model', 'Loading YOLOv5 from URL...');
+      const start = performance.now();
+
+      // You could use a remote URL or file:// URL
+      await ort.loadModel({
+        url: 'https://raw.githubusercontent.com/ronickg/react-native-nitro-onnxruntime/main/example/src/yolov5s.onnx',
+      });
+
+      const end = performance.now();
+      logResult('Load from URL', `Loaded in ${(end - start).toFixed(2)} ms`);
     } catch (error) {
-      console.error('Error loading model:', error);
+      logResult('Load from URL', `Error: ${(error as Error).message}`);
     }
   };
+
+  // Test 3: Load model from direct file path
+  const testLoadFromFilePath = async () => {
+    try {
+      logResult('Load Model', 'Loading YOLOv5 from file path...');
+      const start = performance.now();
+
+      // Direct path to the file without file:// prefix
+      await ort.loadModel({
+        url: 'file://' + ModelPath.YOLOV5,
+      });
+
+      const end = performance.now();
+      logResult('Load from path', `Loaded in ${(end - start).toFixed(2)} ms`);
+    } catch (error) {
+      logResult('Load from path', `Error: ${(error as Error).message}`);
+    }
+  };
+
+  // Performance test - Nitro ONNX
+  const testNitroOnnxPerformance = async () => {
+    try {
+      logResult('Performance', 'Testing YOLOv5 with Nitro ONNX...');
+
+      if (!(await RNFS.exists(ModelPath.YOLOV5))) {
+        throw new Error('YOLOv5 ONNX model not found');
+      }
+
+      const options: any = {};
+
+      // Add platform-specific options
+      if (Platform.OS === 'ios' && modelOptions.useCoreML) {
+        options.executionProviders = [
+          {
+            name: 'coreml',
+            useCPUOnly: modelOptions.useCPUOnly,
+            useCPUAndGPU: modelOptions.useCPUAndGPU,
+            enableOnSubgraph: modelOptions.enableOnSubgraph,
+            onlyEnableDeviceWithANE: modelOptions.onlyEnableDeviceWithANE,
+          },
+        ];
+      } else if (Platform.OS === 'android' && modelOptions.useNNAPI) {
+        options.executionProviders = [
+          {
+            name: 'nnapi',
+            useFP16: modelOptions.useFP16,
+            useNCHW: modelOptions.useNCHW,
+            cpuDisabled: modelOptions.cpuDisabled,
+            cpuOnly: modelOptions.cpuOnly,
+          },
+        ];
+      }
+
+      const model = await ort.loadModel(
+        { url: 'file://' + ModelPath.YOLOV5 },
+        options
+      );
+
+      // Prepare input data - YOLOv5 takes [1, 3, 640, 640] input
+      const inputData = new Float32Array(1 * 3 * 640 * 640).fill(0.1);
+
+      // Warm-up run
+      await model.run({ images: inputData.buffer });
+
+      // Performance measurement
+      const iterations = 5;
+      let totalTime = 0;
+
+      for (let i = 0; i < iterations; i++) {
+        const start = performance.now();
+        await model.run({ images: inputData.buffer });
+        const end = performance.now();
+        totalTime += end - start;
+      }
+
+      logResult('Nitro ONNX', `Avg: ${(totalTime / iterations).toFixed(2)} ms`);
+    } catch (error) {
+      logResult('Nitro ONNX', `Error: ${(error as Error).message}`);
+    }
+  };
+
+  // Performance test - React Native ONNX
+  const testReactNativeOnnxPerformance = async () => {
+    try {
+      logResult('Performance', 'Testing YOLOv5 with React Native ONNX...');
+
+      if (!(await RNFS.exists(ModelPath.YOLOV5))) {
+        throw new Error('YOLOv5 ONNX model not found');
+      }
+
+      const options: any = {};
+
+      // Add platform-specific options
+      if (Platform.OS === 'ios' && modelOptions.useCoreML) {
+        options.executionProviders = [
+          {
+            name: 'coreml',
+            useCPUOnly: modelOptions.useCPUOnly,
+            useCPUAndGPU: modelOptions.useCPUAndGPU,
+            enableOnSubgraph: modelOptions.enableOnSubgraph,
+            onlyEnableDeviceWithANE: modelOptions.onlyEnableDeviceWithANE,
+          },
+        ];
+      } else if (Platform.OS === 'android' && modelOptions.useNNAPI) {
+        options.executionProviders = [
+          {
+            name: 'nnapi',
+            useFP16: modelOptions.useFP16,
+            useNCHW: modelOptions.useNCHW,
+            cpuDisabled: modelOptions.cpuDisabled,
+            cpuOnly: modelOptions.cpuOnly,
+          },
+        ];
+      }
+
+      const session = await OnnxRuntimeInferenceSession.create(
+        ModelPath.YOLOV5,
+        options
+      );
+
+      // Prepare input data - YOLOv5 takes [1, 3, 640, 640] input
+      const inputData = new Float32Array(1 * 3 * 640 * 640).fill(0.1);
+      const tensorInput = new Tensor('float32', inputData, [1, 3, 640, 640]);
+
+      // Warm-up run
+      await session.run({ images: tensorInput });
+
+      // Performance measurement
+      const iterations = 5;
+      let totalTime = 0;
+
+      for (let i = 0; i < iterations; i++) {
+        const start = performance.now();
+        await session.run({ images: tensorInput });
+        const end = performance.now();
+        totalTime += end - start;
+      }
+
+      logResult('RN ONNX', `Avg: ${(totalTime / iterations).toFixed(2)} ms`);
+      await session.release();
+    } catch (error) {
+      logResult('RN ONNX', `Error: ${(error as Error).message}`);
+    }
+  };
+
+  // Performance test - TFLite
+  const testTFLitePerformance = async () => {
+    try {
+      logResult('Performance', 'Testing YOLOv5 with TFLite...');
+
+      if (!(await RNFS.exists(ModelPath.YOLOV5_TFLITE))) {
+        throw new Error('YOLOv5 TFLite model not found');
+      }
+
+      // Note: In a real app, this would be a valid asset
+      const model = await loadTensorflowModel(
+        require('./yolov5s-fp16.tflite'),
+        modelOptions.useNNAPI ? 'nnapi' : 'default'
+      );
+
+      // Prepare input data (TFLite typically uses NHWC format)
+      const inputData = new Float32Array(1 * 640 * 640 * 3).fill(0.1);
+
+      // Warm-up run
+      await model.run([inputData]);
+
+      // Performance measurement
+      const iterations = 5;
+      let totalTime = 0;
+
+      for (let i = 0; i < iterations; i++) {
+        const start = performance.now();
+        await model.run([inputData]);
+        const end = performance.now();
+        totalTime += end - start;
+      }
+
+      logResult('TFLite', `Avg: ${(totalTime / iterations).toFixed(2)} ms`);
+    } catch (error) {
+      logResult('TFLite', `Error: ${(error as Error).message}`);
+    }
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>ONNX Runtime Test</Text>
-      <Button
-        title="Request Storage Permission"
-        onPress={requestStoragePermission}
-      />
-      <Button title="Load Model" onPress={loadModel} />
-      <Button
-        title="Load Big Model"
-        onPress={async () => {
-          const start = performance.now();
-          await ort.loadModel(
-            RNFS.DocumentDirectoryPath + '/arcfaceresnet100-8.onnx'
-          );
-          const end = performance.now();
-          console.log(`Model loaded in ${end - start} milliseconds`);
-        }}
-      />
-      <Button
-        title="Old Speed Test"
-        onPress={async () => {
-          // Create inference session using the backend
-          const session = await OnnxRuntimeInferenceSession.create(
-            RNFS.DocumentDirectoryPath + '/model.onnx'
-            // { backendHint: 'android' } // Pass the custom backend
-          );
+      <Text style={styles.title}>YOLOv5 Model Tests</Text>
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Model Loading Tests</Text>
+          <View style={{ flexDirection: 'row', gap: 16 }}>
+            <Button title="require()" onPress={testLoadFromRequire} />
+            <Button title="url" onPress={testLoadFromURL} />
+            <Button title="file://" onPress={testLoadFromFilePath} />
+          </View>
+        </View>
 
-          // Prepare input data
-          const dataA = new Float32Array([
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-          ]);
-          const dataB = new Float32Array([
-            10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120,
-          ]);
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Performance Tests</Text>
+          <View style={{ flexDirection: 'row', gap: 16 }}>
+            <Button title="Nitro ONNX" onPress={testNitroOnnxPerformance} />
+            <Button
+              title="React Native ONNX"
+              onPress={testReactNativeOnnxPerformance}
+            />
+            <Button title="TFLite" onPress={testTFLitePerformance} />
+          </View>
+        </View>
 
-          // Create Tensor objects directly (no need for manual JSIBlob conversion)
-          const tensorA = new Tensor('float32', dataA, [3, 4]);
-          const tensorB = new Tensor('float32', dataB, [4, 3]);
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Model Options</Text>
 
-          // Prepare feeds using model input names
-          const feeds = {
-            a: tensorA,
-            b: tensorB,
-          };
+          {Platform.OS === 'ios' && (
+            <>
+              <View style={styles.optionRow}>
+                <Text>Use CoreML</Text>
+                <Switch
+                  value={modelOptions.useCoreML}
+                  onValueChange={() => toggleOption('useCoreML')}
+                />
+              </View>
 
-          const start = performance.now();
+              {modelOptions.useCoreML && (
+                <>
+                  <View style={styles.optionRow}>
+                    <Text>CPU Only</Text>
+                    <Switch
+                      value={modelOptions.useCPUOnly}
+                      onValueChange={() => toggleOption('useCPUOnly')}
+                    />
+                  </View>
 
-          // Run the model
-          const results = await session.run(feeds);
+                  <View style={styles.optionRow}>
+                    <Text>CPU And GPU</Text>
+                    <Switch
+                      value={modelOptions.useCPUAndGPU}
+                      onValueChange={() => toggleOption('useCPUAndGPU')}
+                    />
+                  </View>
 
-          const end = performance.now();
-          console.log(`Model ran in ${end - start} milliseconds`);
+                  <View style={styles.optionRow}>
+                    <Text>Enable On Subgraph</Text>
+                    <Switch
+                      value={modelOptions.enableOnSubgraph}
+                      onValueChange={() => toggleOption('enableOnSubgraph')}
+                    />
+                  </View>
 
-          // Access results (already decoded as Tensor objects)
-          // Example: results['outputName'].data will give you the output data
-          console.log('Results:', results);
+                  <View style={styles.optionRow}>
+                    <Text>Only On Devices with ANE</Text>
+                    <Switch
+                      value={modelOptions.onlyEnableDeviceWithANE}
+                      onValueChange={() =>
+                        toggleOption('onlyEnableDeviceWithANE')
+                      }
+                    />
+                  </View>
+                </>
+              )}
+            </>
+          )}
 
-          // Clean up
-          await session.release();
-        }}
-      />
-      <Button
-        title="New Speed Test"
-        onPress={async () => {
-          // const model = await ort.loadModel(
-          //   RNFS.DocumentDirectoryPath + '/model.onnx'
-          // );
-          // // prepare inputs. a tensor need its corresponding TypedArray as data
-          // const dataA = new Float32Array([
-          //   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-          // ]);
-          // const dataB = new Float32Array([
-          //   10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120,
-          // ]);
-          // const tensorA: EncodedTensor = {
-          //   type: 'float32',
-          //   data: dataA.buffer,
-          //   dims: [3, 4],
-          // };
-          // const tensorB: EncodedTensor = {
-          //   type: 'float32',
-          //   data: dataB.buffer,
-          //   dims: [4, 3],
-          // };
-          // // prepare feeds. use model input names as keys.
-          // const feeds = { a: tensorA, b: tensorB };
-          // const start = performance.now();
-          // const result = await model.run(feeds);
-          // const end = performance.now();
-          // console.log(`Model ran in ${end - start} milliseconds`);
-          // console.log('Result:', result.c);
-          // await model.close();
-        }}
-      />
-      <Button
-        title="Test SqueezeNet Model"
-        onPress={async () => {
-          console.log('Testing SqueezeNet Model');
-          try {
-            const modelPath = `${RNFS.DocumentDirectoryPath}/squeezenet1.1-7.onnx`;
+          {Platform.OS === 'android' && (
+            <>
+              <View style={styles.optionRow}>
+                <Text>Use NNAPI</Text>
+                <Switch
+                  value={modelOptions.useNNAPI}
+                  onValueChange={() => toggleOption('useNNAPI')}
+                />
+              </View>
 
-            // Check if model exists
-            const fileExists = await RNFS.exists(modelPath);
-            if (!fileExists) {
-              throw new Error(
-                'SqueezeNet model not found. Please copy squeezenet1.1-7.onnx to the document directory.'
-              );
-            }
+              {modelOptions.useNNAPI && (
+                <>
+                  <View style={styles.optionRow}>
+                    <Text>Use FP16</Text>
+                    <Switch
+                      value={modelOptions.useFP16}
+                      onValueChange={() => toggleOption('useFP16')}
+                    />
+                  </View>
 
-            // Create inference session
-            const session = await OnnxRuntimeInferenceSession.create(
-              modelPath,
-              {
-                // backendHint: onnxruntimeBackend, // Uncomment if using custom backend
-              }
-            );
+                  <View style={styles.optionRow}>
+                    <Text>Use NCHW</Text>
+                    <Switch
+                      value={modelOptions.useNCHW}
+                      onValueChange={() => toggleOption('useNCHW')}
+                    />
+                  </View>
 
-            // Log input names for confirmation (optional)
-            console.log('Model input names:', session.inputNames); // Should log ["data"]
+                  <View style={styles.optionRow}>
+                    <Text>CPU Disabled</Text>
+                    <Switch
+                      value={modelOptions.cpuDisabled}
+                      onValueChange={() => toggleOption('cpuDisabled')}
+                    />
+                  </View>
 
-            // Prepare dummy input (random data for [1, 3, 224, 224])
-            const inputData = new Float32Array(1 * 3 * 224 * 224).map(() =>
-              Math.random()
-            );
-            const tensorInput = new Tensor(
-              'float32',
-              inputData,
-              [1, 3, 224, 224]
-            );
+                  <View style={styles.optionRow}>
+                    <Text>CPU Only</Text>
+                    <Switch
+                      value={modelOptions.cpuOnly}
+                      onValueChange={() => toggleOption('cpuOnly')}
+                    />
+                  </View>
+                </>
+              )}
+            </>
+          )}
+        </View>
 
-            // Use the correct input name 'data'
-            const feeds = {
-              data: tensorInput,
-            };
-
-            // Warm-up run
-            await session.run(feeds);
-
-            // Measure performance
-            const iterations = 10;
-            let totalTime = 0;
-
-            for (let i = 0; i < iterations; i++) {
-              const start = performance.now();
-              const results = await session.run(feeds);
-              const end = performance.now();
-              totalTime += end - start;
-
-              if (i === 0) {
-                console.log(
-                  'Sample output shape:',
-                  results[session.outputNames[0]].dims
-                );
-              }
-            }
-
-            const avgTime = totalTime / iterations;
-            console.log(
-              `Average runtime over ${iterations} iterations: ${avgTime.toFixed(2)} ms`
-            );
-
-            // Clean up
-            await session.release();
-          } catch (error) {
-            console.error('Error running model:', error);
-          }
-        }}
-      />
-      {/* <Button
-        title="Test SqueezeNet Model"
-        onPress={async () => {
-          console.log('Testing SqueezeNet Model');
-          try {
-            const modelPath = `${RNFS.DocumentDirectoryPath}/squeezenet1.1-7.onnx`;
-
-            // Check if model exists
-            const fileExists = await RNFS.exists(modelPath);
-            if (!fileExists) {
-              throw new Error(
-                'SqueezeNet model not found. Please copy squeezenet1.1-7.onnx to the document directory.'
-              );
-            }
-
-            // Create inference session
-            const session = await ort.loadModel(modelPath);
-
-            // Log input names for confirmation (optional)
-            console.log('Model input names:', session.inputNames); // Should log ["data"]
-
-            // Prepare dummy input (random data for [1, 3, 224, 224])
-            const inputData = new Float32Array(1 * 3 * 224 * 224).map(() =>
-              Math.random()
-            );
-            // const tensorInput = new Tensor(
-            //   'float32',
-            //   inputData,
-            //   [1, 3, 224, 224]
-            // );
-
-            const tensorInput: EncodedTensor = {
-              type: 'float32',
-              data: inputData.buffer,
-              dims: [1, 3, 224, 224],
-            };
-
-            // Use the correct input name 'data'
-            const feeds = {
-              data: tensorInput,
-            };
-
-            // Warm-up run
-            await session.run(feeds);
-
-            // Measure performance
-            const iterations = 10;
-            let totalTime = 0;
-
-            for (let i = 0; i < iterations; i++) {
-              const start = performance.now();
-              const results = await session.run(feeds);
-              const end = performance.now();
-              totalTime += end - start;
-
-              // if (i === 0) {
-              //   console.log(
-              //     'Sample output shape:',
-              //     results[session.outputNames[0]].dims
-              //   );
-              // }
-            }
-
-            const avgTime = totalTime / iterations;
-            console.log(
-              `Average runtime over ${iterations} iterations: ${avgTime.toFixed(2)} ms`
-            );
-
-            // Clean up
-            await session.close();
-          } catch (error) {
-            console.error('Error running model:', error);
-          }
-        }}
-      /> */}
-      <Button
-        title="Test old YOLOv5 ONNX"
-        onPress={async () => {
-          console.log('Testing old YOLOv5 ONNX');
-          try {
-            const modelPath = `${RNFS.DocumentDirectoryPath}/yolov5s.onnx`;
-            if (!(await RNFS.exists(modelPath))) {
-              throw new Error('YOLOv5 ONNX model not found.');
-            }
-            const session = await OnnxRuntimeInferenceSession.create(
-              modelPath,
-              {
-                executionProviders: [
-                  {
-                    name: 'nnapi',
-                    useFP16: true,
-                    useNCHW: false,
-                    cpuDisabled: false,
-                  },
-                  // { name: 'xnnpack' },
-                  { name: 'cpu' },
-                ],
-              }
-            );
-            console.log(session);
-
-            // Prepare input [1, 3, 640, 640] (channel-first)
-            const inputData = new Float32Array(1 * 3 * 640 * 640).map(() =>
-              Math.random()
-            );
-            const tensorInput = new Tensor(
-              'float32',
-              inputData,
-              [1, 3, 640, 640]
-            );
-
-            const feeds = { images: tensorInput }; // YOLOv5 ONNX input is 'images'
-
-            // Warm-up
-            await session.run(feeds);
-
-            // Measure performance
-            const iterations = 10;
-            let totalTime = 0;
-            for (let i = 0; i < iterations; i++) {
-              const start = performance.now();
-              await session.run(feeds);
-              const end = performance.now();
-              totalTime += end - start;
-              if (i === 0) {
-                // console.log(results[session.outputNames[0]]);
-                // console.log(
-                //   'ONNX output shape:',
-                //   results[session.outputNames[0]].dims
-                // );
-              }
-            }
-
-            console.log(
-              `ONNX avg runtime: ${(totalTime / iterations).toFixed(2)} ms`
-            );
-            await session.release();
-          } catch (error) {
-            console.error('ONNX error:', error);
-          }
-        }}
-      />
-      <Button
-        title="Test new YOLOv5 ONNX"
-        onPress={async () => {
-          console.log('Testing new YOLOv5 ONNX');
-          console.log(RNFS.DocumentDirectoryPath);
-          try {
-            const modelPath = `${RNFS.DocumentDirectoryPath}/yolov5s.onnx`;
-            if (!(await RNFS.exists(modelPath))) {
-              throw new Error('YOLOv5 ONNX model not found.');
-            }
-
-            // const options: InferenceSession.SessionOptions = {
-            //   executionProviders: [
-            //     // {
-            //     //   name: 'nnapi',
-            //     //   useFP16: true,
-            //     //   useNCHW: false,
-            //     //   // cpuDisabled: false,
-            //     // },
-            //   ],
-            //   // logSeverityLevel: 0,
-            // };
-            console.log(modelPath);
-            // const session = await ort.loadModel1(
-            //   { url: 'file://' + modelPath },
-            //   {
-            //     executionProviders: [{ name: 'nnapi' }],
-            //   }
-            // );
-            // const session = await ort.loadModel1(require('./yolov5s.onnx'), {
-            //   executionProviders: [{ name: 'nnapi' }],
-            // });
-            const session = await ort.loadModel1(
-              {
-                url: 'https://1drv.ms/u/c/48a1c40521b4fd64/EWOdAias5mRMrCtT2Uo0wOAB230933CukBR1jZs2PHLy2g?e=iXGRdy',
-              },
-              {
-                executionProviders: [{ name: 'nnapi' }],
-              }
-            );
-            console.log(session.inputNames);
-            console.log(session.outputNames);
-            // Prepare input [1, 3, 640, 640] (channel-first)
-            const inputData = new Float32Array(1 * 3 * 640 * 640).map(() =>
-              Math.random()
-            );
-            // const tensorInput: EncodedTensor = {
-            //   type: 'float32',
-            //   data: inputData.buffer,
-            //   dims: [1, 3, 640, 640],
-            // };
-
-            const feeds = { images: inputData.buffer }; // YOLOv5 ONNX input is 'images'
-
-            // Warm-up
-            await session.run(feeds);
-
-            // Measure performance
-            const iterations = 10;
-            let totalTime = 0;
-            for (let i = 0; i < iterations; i++) {
-              const start = performance.now();
-              await session.run(feeds);
-              const end = performance.now();
-              totalTime += end - start;
-              if (i === 0) {
-                // console.log(
-                //   new Float32Array(results[session.outputNames[0]!.name]!)
-                //     .length
-                // );
-              }
-            }
-
-            console.log(
-              `ONNX avg runtime: ${(totalTime / iterations).toFixed(2)} ms`
-            );
-            // session.dispose();
-            // await session.close();
-          } catch (error) {
-            console.error('ONNX error:', error);
-          }
-        }}
-      />
-      <Button
-        title="Test YOLOv5 Tflite"
-        onPress={async () => {
-          // console.log('Testing YOLOv5 TFLite with react-native-fast-tflite');
-          try {
-            const modelPath = `${RNFS.DocumentDirectoryPath}/yolov5s-fp16.tflite`;
-            if (!(await RNFS.exists(modelPath))) {
-              throw new Error('YOLOv5 TFLite model not found.');
-            }
-            // console.log('Model path:', modelPath);
-            // Load the model
-            const model = await loadTensorflowModel(
-              require('./yolov5s-fp16.tflite')
-            );
-
-            // console.log(model);
-            // Prepare input [1, 640, 640, 3]
-            const inputData = new Float32Array(1 * 640 * 640 * 3).map(() =>
-              Math.random()
-            );
-            const inputs = [inputData]; // Wrap in array for run method
-
-            // Warm-up run
-            await model.run(inputs);
-
-            // Measure performance
-            const iterations = 10;
-            let totalTime = 0;
-            for (let i = 0; i < iterations; i++) {
-              const start = performance.now();
-              await model.run(inputs);
-              const end = performance.now();
-              totalTime += end - start;
-              if (i === 0) {
-                // const firstOutput = outputs;
-                // console.log('TFLite output length:', firstOutput[0]?.length); // First output tensor length
-              }
-            }
-
-            console.log(
-              `TFLite avg runtime: ${(totalTime / iterations).toFixed(2)} ms`
-            );
-            // No explicit cleanup needed per docs, model is garbage-collected
-          } catch (error) {
-            console.error('TFLite error:', error);
-          }
-        }}
-      />
+        <View style={styles.resultsContainer}>
+          <Text style={styles.sectionTitle}>Results</Text>
+          {Object.entries(results).map(([key, value]) => (
+            <View key={key} style={styles.resultRow}>
+              <Text style={styles.resultKey}>{key}:</Text>
+              <Text style={styles.resultValue}>{value}</Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -495,47 +427,46 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    gap: 10,
+    padding: 16,
+  },
+  scrollView: {
+    flex: 1,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 16,
   },
-  versionText: {
-    fontSize: 16,
-    marginBottom: 20,
+  section: {
+    marginBottom: 24,
+    gap: 8,
   },
-  buttonContainer: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  optionRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    alignItems: 'center',
+    paddingVertical: 8,
   },
-  resultContainer: {
-    padding: 10,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 5,
-    marginBottom: 20,
+  resultsContainer: {
+    backgroundColor: '#f5f5f5',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 24,
   },
-  resultTitle: {
+  resultRow: {
+    flexDirection: 'row',
+    marginVertical: 4,
+  },
+  resultKey: {
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginRight: 8,
   },
-  logContainer: {
+  resultValue: {
     flex: 1,
-    backgroundColor: '#f9f9f9',
-    padding: 10,
-    borderRadius: 5,
-    marginTop: 10,
-  },
-  logTitle: {
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  logEntry: {
-    fontSize: 12,
-    marginBottom: 3,
   },
 });

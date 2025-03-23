@@ -57,5 +57,5 @@ export interface Onnxruntime
 
 export interface AssetManager
   extends HybridObject<{ ios: 'swift'; android: 'kotlin' }> {
-  fetchByteDataFromUrl(url: string): ArrayBuffer;
+  fetchByteDataFromUrl(url: string): Promise<ArrayBuffer>;
 }
