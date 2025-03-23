@@ -84,11 +84,6 @@ namespace margelo::nitro::nitroonnxruntime
         dims.size());
   }
 
-  std::string InferenceSession::getKey()
-  {
-    return key_;
-  }
-
   std::vector<Tensor> InferenceSession::getInputNames()
   {
     return inputNames_;
@@ -255,21 +250,25 @@ namespace margelo::nitro::nitroonnxruntime
     return promise;
   }
 
-  std::shared_ptr<Promise<void>> InferenceSession::close()
+  void InferenceSession::dispose()
   {
-    auto promise = Promise<void>::create();
-
     try
     {
-      session_.reset();
-      promise->resolve();
+      // Clear any stored input/output metadata
+      inputNames_.clear();
+      outputNames_.clear();
+
+      // Reset the session (this will call the destructor of Ort::Session)
+      if (session_)
+      {
+        session_.reset();
+      }
     }
     catch (const std::exception &e)
     {
-      promise->reject(std::make_exception_ptr(e));
+      // Log error but don't throw as dispose() should not throw
+      fprintf(stderr, "Error during dispose: %s\n", e.what());
     }
-
-    return promise;
   }
 
 } // namespace margelo::nitro::nitroonnxruntime

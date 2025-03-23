@@ -1,7 +1,7 @@
 #pragma once
 
 #include "HybridInferenceSessionSpec.hpp"
-#include <onnxruntime_cxx_api.h>
+#include "onnxruntime_cxx_api.h"
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -14,29 +14,29 @@ namespace margelo::nitro::nitroonnxruntime
   public:
     InferenceSession() : HybridObject(TAG) {}
     // Constructor
-    InferenceSession(std::unique_ptr<Ort::Session> session, std::string key)
-        : HybridObject(TAG),
-          session_(std::move(session)),
-          key_(std::move(key))
+    InferenceSession(std::unique_ptr<Ort::Session> session)
+        : HybridObject(TAG), session_(std::move(session))
     {
       initializeIONames();
     }
 
-    // Destructor
-    ~InferenceSession() override = default;
+    // Destructor - will be called automatically when shared_ptr ref count hits 0
+    ~InferenceSession() override
+    {
+      // Call dispose to ensure cleanup
+      dispose();
+    }
 
   public:
     // Implementation of pure virtual methods from spec
-    std::string getKey() override;
     std::vector<Tensor> getInputNames() override;
     std::vector<Tensor> getOutputNames() override;
     std::shared_ptr<Promise<std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>>>> run(
         const std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> &feeds) override;
-    std::shared_ptr<Promise<void>> close() override;
+    void dispose() override;
 
   private:
     std::unique_ptr<Ort::Session> session_;
-    std::string key_;
     std::vector<Tensor> inputNames_;
     std::vector<Tensor> outputNames_;
 

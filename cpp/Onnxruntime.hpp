@@ -2,7 +2,7 @@
 
 #include "HybridOnnxruntimeSpec.hpp"
 #include "InferenceSession.hpp"
-#include <onnxruntime_cxx_api.h>
+#include "onnxruntime_cxx_api.h"
 #include <memory>
 #include <unordered_map>
 
@@ -21,8 +21,8 @@ namespace margelo::nitro::nitroonnxruntime
   public:
     // Implementation of pure virtual methods from spec
     std::string getVersion() override;
-    std::shared_ptr<Promise<std::shared_ptr<HybridInferenceSessionSpec>>> loadModel(const std::string &modelPath) override;
-    std::shared_ptr<Promise<std::shared_ptr<HybridInferenceSessionSpec>>> loadModelFromBuffer(const std::shared_ptr<ArrayBuffer> &buffer) override;
+    std::shared_ptr<Promise<std::shared_ptr<HybridInferenceSessionSpec>>> loadModel(const std::string &modelPath, const std::optional<SessionOptions> &options = std::nullopt) override;
+    std::shared_ptr<Promise<std::shared_ptr<HybridInferenceSessionSpec>>> loadModelFromBuffer(const std::shared_ptr<ArrayBuffer> &buffer, const std::optional<SessionOptions> &options = std::nullopt) override;
 
   private:
     // ONNX Runtime environment (shared across sessions)

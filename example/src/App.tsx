@@ -340,22 +340,22 @@ export default function App() {
             if (!(await RNFS.exists(modelPath))) {
               throw new Error('YOLOv5 ONNX model not found.');
             }
-
             const session = await OnnxRuntimeInferenceSession.create(
               modelPath,
               {
-                // executionProviders: [
-                //   {
-                //     name: 'nnapi',
-                //     useFP16: true,
-                //     useNCHW: false,
-                //     cpuDisabled: false,
-                //   },
-                //   { name: 'xnnpack' },
-                //   { name: 'cpu' },
-                // ],
+                executionProviders: [
+                  {
+                    // name: 'nnapi',
+                    // useFP16: true,
+                    // useNCHW: false,
+                    // cpuDisabled: false,
+                  },
+                  // { name: 'xnnpack' },
+                  { name: 'cpu' },
+                ],
               }
             );
+            console.log(session);
 
             // Prepare input [1, 3, 640, 640] (channel-first)
             const inputData = new Float32Array(1 * 3 * 640 * 640).map(() =>
@@ -377,7 +377,7 @@ export default function App() {
             let totalTime = 0;
             for (let i = 0; i < iterations; i++) {
               const start = performance.now();
-              // const results = await session.run(feeds);
+              await session.run(feeds);
               const end = performance.now();
               totalTime += end - start;
               if (i === 0) {
@@ -402,14 +402,17 @@ export default function App() {
         title="Test new YOLOv5 ONNX"
         onPress={async () => {
           console.log('Testing new YOLOv5 ONNX');
+          console.log(RNFS.DocumentDirectoryPath);
           try {
             const modelPath = `${RNFS.DocumentDirectoryPath}/yolov5s.onnx`;
             if (!(await RNFS.exists(modelPath))) {
               throw new Error('YOLOv5 ONNX model not found.');
             }
 
-            const session = await ort.loadModel(modelPath);
-            // console.log(session);
+            const session = await ort.loadModel(modelPath, {
+              executionProviders: ['nnapi'],
+            });
+            console.log(session);
 
             // Prepare input [1, 3, 640, 640] (channel-first)
             const inputData = new Float32Array(1 * 3 * 640 * 640).map(() =>
@@ -431,7 +434,7 @@ export default function App() {
             let totalTime = 0;
             for (let i = 0; i < iterations; i++) {
               const start = performance.now();
-              // const results = await session.run(feeds);
+              await session.run(feeds);
               const end = performance.now();
               totalTime += end - start;
               if (i === 0) {
@@ -445,7 +448,8 @@ export default function App() {
             console.log(
               `ONNX avg runtime: ${(totalTime / iterations).toFixed(2)} ms`
             );
-            await session.close();
+            // session.dispose();
+            // await session.close();
           } catch (error) {
             console.error('ONNX error:', error);
           }
@@ -481,7 +485,7 @@ export default function App() {
             let totalTime = 0;
             for (let i = 0; i < iterations; i++) {
               const start = performance.now();
-              // const outputs = await model.run(inputs);
+              await model.run(inputs);
               const end = performance.now();
               totalTime += end - start;
               if (i === 0) {
