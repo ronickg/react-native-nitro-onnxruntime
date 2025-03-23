@@ -6,11 +6,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import {
-  ort,
-  // type EncodedTensor,
-  // type InferenceSession,
-} from 'react-native-nitro-onnxruntime';
+import ort from 'react-native-nitro-onnxruntime';
+
 // import ortD from 'react-native-nitro-onnxruntime';
 import RNFS from 'react-native-fs';
 // @ts-ignore
@@ -44,44 +41,7 @@ export default function App() {
 
   const loadModel = async () => {
     try {
-      // Load the model using the ArrayBuffer
-      // const source = require('./model.onnx');
-      // const asset = Image.resolveAssetSource(source);
-      // let uri = asset.uri;
-      // console.log(`Resolved Model path: ${asset.uri}`);
-
-      const files = await RNFS.readDir(RNFS.DocumentDirectoryPath);
-      const file = files.find((_file) => _file.name === 'model.onnx');
-      if (file && file.isFile()) {
-        // const start = performance.now();
-        // const model = await ort.loadModel(
-        //   RNFS.DocumentDirectoryPath + '/' + file.name
-        // );
-        // const end = performance.now();
-        // console.log(`Model loaded in ${end - start} milliseconds`);
-        // // prepare inputs. a tensor need its corresponding TypedArray as data
-        // const dataA = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-        // const dataB = new Float32Array([
-        //   10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120,
-        // ]);
-        // const tensorA: EncodedTensor = {
-        //   type: 'float32',
-        //   data: dataA.buffer,
-        //   dims: [3, 4],
-        // };
-        // const tensorB: EncodedTensor = {
-        //   type: 'float32',
-        //   data: dataB.buffer,
-        //   dims: [4, 3],
-        // };
-        // // prepare feeds. use model input names as keys.
-        // const feeds = { a: tensorA, b: tensorB };
-        // const result = await model.run(feeds);
-        // console.log('Result:', result);
-      } else {
-        console.log('Model not found');
-      }
-      // console.log('Model loaded successfully:', model);
+      // testAssetManager(require('./model.onnx'));
     } catch (error) {
       console.error('Error loading model:', error);
     }
@@ -89,7 +49,6 @@ export default function App() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>ONNX Runtime Test</Text>
-      <Text style={styles.versionText}>Version: {ort.getVersion()}</Text>
       <Button
         title="Request Storage Permission"
         onPress={requestStoragePermission}
@@ -345,10 +304,10 @@ export default function App() {
               {
                 executionProviders: [
                   {
-                    // name: 'nnapi',
-                    // useFP16: true,
-                    // useNCHW: false,
-                    // cpuDisabled: false,
+                    name: 'nnapi',
+                    useFP16: true,
+                    useNCHW: false,
+                    cpuDisabled: false,
                   },
                   // { name: 'xnnpack' },
                   { name: 'cpu' },
@@ -409,11 +368,37 @@ export default function App() {
               throw new Error('YOLOv5 ONNX model not found.');
             }
 
-            const session = await ort.loadModel(modelPath, {
-              executionProviders: ['nnapi'],
-            });
-            console.log(session);
-
+            // const options: InferenceSession.SessionOptions = {
+            //   executionProviders: [
+            //     // {
+            //     //   name: 'nnapi',
+            //     //   useFP16: true,
+            //     //   useNCHW: false,
+            //     //   // cpuDisabled: false,
+            //     // },
+            //   ],
+            //   // logSeverityLevel: 0,
+            // };
+            console.log(modelPath);
+            // const session = await ort.loadModel1(
+            //   { url: 'file://' + modelPath },
+            //   {
+            //     executionProviders: [{ name: 'nnapi' }],
+            //   }
+            // );
+            // const session = await ort.loadModel1(require('./yolov5s.onnx'), {
+            //   executionProviders: [{ name: 'nnapi' }],
+            // });
+            const session = await ort.loadModel1(
+              {
+                url: 'https://1drv.ms/u/c/48a1c40521b4fd64/EWOdAias5mRMrCtT2Uo0wOAB230933CukBR1jZs2PHLy2g?e=iXGRdy',
+              },
+              {
+                executionProviders: [{ name: 'nnapi' }],
+              }
+            );
+            console.log(session.inputNames);
+            console.log(session.outputNames);
             // Prepare input [1, 3, 640, 640] (channel-first)
             const inputData = new Float32Array(1 * 3 * 640 * 640).map(() =>
               Math.random()

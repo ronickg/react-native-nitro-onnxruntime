@@ -6,6 +6,15 @@
 #include <memory>
 #include <unordered_map>
 
+// Include provider headers based on platform
+#if defined(__APPLE__)
+#include "coreml_provider_factory.h"
+#endif
+
+#if defined(__ANDROID__)
+#include "nnapi_provider_factory.h"
+#endif
+
 namespace margelo::nitro::nitroonnxruntime
 {
 
@@ -25,6 +34,7 @@ namespace margelo::nitro::nitroonnxruntime
     std::shared_ptr<Promise<std::shared_ptr<HybridInferenceSessionSpec>>> loadModelFromBuffer(const std::shared_ptr<ArrayBuffer> &buffer, const std::optional<SessionOptions> &options = std::nullopt) override;
 
   private:
+    void configureSessionOptions(Ort::SessionOptions &sessionOptions, const std::optional<SessionOptions> &options);
     // ONNX Runtime environment (shared across sessions)
     Ort::Env env_;
   };

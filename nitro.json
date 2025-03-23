@@ -13,6 +13,10 @@
     },
     "InferenceSession": {
       "cpp": "InferenceSession"
+    },
+    "AssetManager": {
+      "swift": "AssetManager",
+      "kotlin": "AssetManager"
     }
   },
   "ignorePaths": ["node_modules"]
