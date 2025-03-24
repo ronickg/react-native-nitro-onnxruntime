@@ -1311,6 +1311,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - TensorFlowLiteC (= 2.17.0)
+    - TensorFlowLiteC/CoreML (= 2.17.0)
     - Yoga
   - React-NativeModulesApple (0.78.1):
     - glog
@@ -1605,6 +1606,8 @@ PODS:
   - TensorFlowLiteC (2.17.0):
     - TensorFlowLiteC/Core (= 2.17.0)
   - TensorFlowLiteC/Core (2.17.0)
+  - TensorFlowLiteC/CoreML (2.17.0):
+    - TensorFlowLiteC/Core
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -1877,7 +1880,7 @@ SPEC CHECKSUMS:
   React-logger: 88de26ac2b4ae3ebf55108f4be299f967151d0ec
   React-Mapbuffer: b6619632c9800e300a9dcfb5139009416cec6392
   React-microtasksnativemodule: e99c1d7791f5e8d5be370b78e02433e64d2391d8
-  react-native-fast-tflite: 5e8b607f8c5acb3b663bb7f5a688d7da4477ecd8
+  react-native-fast-tflite: 0e25bbc0d836dd1d967b1ef559d441ecd7b4a999
   React-NativeModulesApple: fb48894de492e6f9a73e53d8f92a6a792e40666c
   React-perflogger: e1c8cc9ba55dfabb670966d73622eabcfa0ac29e
   React-performancetimeline: 6f8984a509036b7adc382b8d15193733f88ee749
@@ -1911,6 +1914,6 @@ SPEC CHECKSUMS:
   TensorFlowLiteC: eac6d689a8d391d1b202dc59e3d9165ba64aaf73
   Yoga: b94ff2d7559cb66837c97a3f394ddb817faad4d6
 
-PODFILE CHECKSUM: b95bfb3602b5ca1d28f94bce8d825e2915c488e2
+PODFILE CHECKSUM: c714e5bf28c91f2bb242c07c437f28380f0d7408
 
 COCOAPODS: 1.15.2

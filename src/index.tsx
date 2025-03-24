@@ -39,7 +39,7 @@ export type OnnxRuntimePlugin =
       state: 'error';
     };
 
-async function loadModel(source: ModelSource, options?: SessionOptions) {
+async function loadBufferFromSource(source: ModelSource) {
   let uri: string;
   if (typeof source === 'number') {
     const asset = Image.resolveAssetSource(source);
@@ -51,7 +51,11 @@ async function loadModel(source: ModelSource, options?: SessionOptions) {
       'Onnx-runtime: Invalid source passed! Source should be either a React Native require(..) or a `{ url: string }` object!'
     );
   }
-  const buffer = await assetManager.fetchByteDataFromUrl(uri);
+  return await assetManager.fetchByteDataFromUrl(uri);
+}
+
+async function loadModel(source: ModelSource, options?: SessionOptions) {
+  const buffer = await loadBufferFromSource(source);
   //@ts-ignore Allowing the use of the SessionOptions type which is fully compatible with the nitro types
   return ort.loadModelFromBuffer(buffer, options);
 }
@@ -83,4 +87,5 @@ export function useLoadModel(source: ModelSource, options?: SessionOptions) {
 export default {
   useLoadModel,
   loadModel,
+  loadBufferFromSource,
 };

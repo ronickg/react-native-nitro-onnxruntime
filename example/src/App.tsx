@@ -124,9 +124,9 @@ export default function App() {
     try {
       logResult('Performance', 'Testing YOLOv5 with Nitro ONNX...');
 
-      if (!(await RNFS.exists(ModelPath.YOLOV5))) {
-        throw new Error('YOLOv5 ONNX model not found');
-      }
+      // if (!(await RNFS.exists(ModelPath.YOLOV5))) {
+      //   throw new Error('YOLOv5 ONNX model not found');
+      // }
 
       const options: any = {};
 
@@ -153,10 +153,7 @@ export default function App() {
         ];
       }
 
-      const model = await ort.loadModel(
-        { url: 'file://' + ModelPath.YOLOV5 },
-        options
-      );
+      const model = await ort.loadModel(require('./yolov5s.onnx'), options);
 
       // Prepare input data - YOLOv5 takes [1, 3, 640, 640] input
       const inputData = new Float32Array(1 * 3 * 640 * 640).fill(0.1);
@@ -186,9 +183,9 @@ export default function App() {
     try {
       logResult('Performance', 'Testing YOLOv5 with React Native ONNX...');
 
-      if (!(await RNFS.exists(ModelPath.YOLOV5))) {
-        throw new Error('YOLOv5 ONNX model not found');
-      }
+      // if (!(await RNFS.exists(ModelPath.YOLOV5))) {
+      //   throw new Error('YOLOv5 ONNX model not found');
+      // }
 
       const options: any = {};
 
@@ -215,10 +212,9 @@ export default function App() {
         ];
       }
 
-      const session = await OnnxRuntimeInferenceSession.create(
-        ModelPath.YOLOV5,
-        options
-      );
+      const buffer = await ort.loadBufferFromSource(require('./yolov5s.onnx'));
+
+      const session = await OnnxRuntimeInferenceSession.create(buffer, options);
 
       // Prepare input data - YOLOv5 takes [1, 3, 640, 640] input
       const inputData = new Float32Array(1 * 3 * 640 * 640).fill(0.1);
@@ -250,14 +246,20 @@ export default function App() {
     try {
       logResult('Performance', 'Testing YOLOv5 with TFLite...');
 
-      if (!(await RNFS.exists(ModelPath.YOLOV5_TFLITE))) {
-        throw new Error('YOLOv5 TFLite model not found');
-      }
+      // if (!(await RNFS.exists(ModelPath.YOLOV5_TFLITE))) {
+      //   throw new Error('YOLOv5 TFLite model not found');
+      // }
 
       // Note: In a real app, this would be a valid asset
       const model = await loadTensorflowModel(
         require('./yolov5s-fp16.tflite'),
-        modelOptions.useNNAPI ? 'nnapi' : 'default'
+        Platform.OS === 'android'
+          ? modelOptions.useNNAPI
+            ? 'nnapi'
+            : 'default'
+          : modelOptions.useCoreML
+            ? 'core-ml'
+            : 'default'
       );
 
       // Prepare input data (TFLite typically uses NHWC format)
@@ -426,6 +428,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: {
+    backgroundColor: 'white',
     flex: 1,
     padding: 16,
   },
