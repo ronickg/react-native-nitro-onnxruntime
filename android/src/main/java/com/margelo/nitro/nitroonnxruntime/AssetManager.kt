@@ -7,12 +7,13 @@ import android.util.Log
 import com.facebook.proguard.annotations.DoNotStrip
 import com.margelo.nitro.core.ArrayBuffer
 import com.margelo.nitro.core.Promise
+import com.margelo.nitro.NitroModules
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.lang.ref.WeakReference
 import java.nio.ByteBuffer
 import java.util.Objects
 import okhttp3.OkHttpClient
@@ -25,125 +26,119 @@ class AssetManager : HybridAssetManagerSpec() {
   companion object {
     private const val TAG = "AssetManager"
     private val client = OkHttpClient()
-    private var weakContext: WeakReference<Context>? = null
 
-    fun setContext(context: Context) {
-      weakContext = WeakReference(context)
-    }
-
-    @SuppressLint("DiscouragedApi")
-    private fun getResourceId(context: Context, name: String): Int {
-      return context.resources.getIdentifier(
-        name,
-        "raw",
-        context.packageName
-      )
-    }
-
-    private fun getLocalFileBytes(stream: InputStream, file: File): ByteArray {
-      val fileSize = file.length()
-
-      if (fileSize > Integer.MAX_VALUE) {
-        throw IOException("File is too large to read into memory")
-      }
-
-      val data = ByteArray(fileSize.toInt())
-
-      var bytesRead = 0
-      var chunk: Int = 0
-      while (bytesRead < fileSize && stream.read(data, bytesRead, (fileSize - bytesRead).toInt()).also { chunk = it } != -1) {
-        bytesRead += chunk
-      }
-
-      if (bytesRead != fileSize.toInt()) {
-        throw IOException("Could not completely read file ${file.name}")
-      }
-
-      return data
-    }
+    // @SuppressLint("DiscouragedApi")
+    // private fun getResourceId(context: Context, name: String): Int {
+    //   return context.resources.getIdentifier(
+    //     name,
+    //     "raw",
+    //     context.packageName
+    //   )
+    // }
   }
 
-  override fun fetchByteDataFromUrl(url: String): Promise<ArrayBuffer> {
-    return Promise.async {
-      try {
-        Log.i(TAG, "Loading byte data from URL: $url...")
+  override fun copyFile(source: String): Promise<String> {
+      return Promise.async {
+          try {
+              Log.i(TAG, "Copying file from source: $source...")
 
-        var uri: Uri? = null
-        var resourceId: Int? = null
+              val context = NitroModules.applicationContext
+                  ?: throw Error("Application context is unavailable")
 
-        if (url.contains("://")) {
-          Log.i(TAG, "Parsing URL...")
-          uri = Uri.parse(url)
-          Log.i(TAG, "Parsed URL: ${uri.toString()}")
-        } else {
-          Log.i(TAG, "Parsing resourceId...")
-          val context = weakContext?.get()
-          if (context == null) {
-            throw Exception("Context has already been destroyed!")
-          }
-          resourceId = getResourceId(context, url)
-          Log.i(TAG, "Parsed resourceId: $resourceId")
-        }
-
-        val bytes = if (uri != null) {
-          if (Objects.equals(uri.scheme, "file")) {
-            Log.i(TAG, "It's a file URL")
-            // It's a file URL
-            val path = uri.path ?: throw IOException("File path cannot be null")
-            val file = File(path)
-
-            // Check if file exists and is readable
-            if (!file.exists() || !file.canRead()) {
-              throw IOException("File does not exist or is not readable: $path")
-            }
-
-            // Read the file
-            FileInputStream(file).use { stream ->
-              getLocalFileBytes(stream, file)
-            }
-          } else {
-            Log.i(TAG, "It's a network URL/http resource")
-            // It's a network URL/http resource
-            val request = Request.Builder().url(uri.toString()).build()
-            client.newCall(request).execute().use { response ->
-              if (response.isSuccessful && response.body != null) {
-                response.body!!.bytes()
-              } else {
-                throw RuntimeException("Response was not successful!")
+              // Extract the base filename without query parameters
+              val baseFileName = try {
+                  if (source.contains("?")) {
+                      File(source.substring(0, source.indexOf("?"))).name
+                  } else {
+                      File(source).name
+                  }
+              } catch (e: IllegalArgumentException) {
+                  throw Error("Invalid source path format: $source - ${e.message}")
               }
-            }
-          }
-        } else if (resourceId != null) {
-          Log.i(TAG, "It's bundled into the Android resources/assets")
-          // It's bundled into the Android resources/assets
-          val context = weakContext?.get()
-          if (context == null) {
-            throw Exception("Context has already been destroyed!")
-          }
-          context.resources.openRawResource(resourceId).use { stream ->
-            val byteStream = ByteArrayOutputStream()
-            val buffer = ByteArray(2048)
-            var length: Int
-            while (stream.read(buffer).also { length = it } != -1) {
-              byteStream.write(buffer, 0, length)
-            }
-            byteStream.toByteArray()
-          }
-        } else {
-          throw Exception("Input is neither a valid URL, nor a resourceId - cannot load model! (Input: $url)")
-        }
 
-        // Convert byte array to ByteBuffer, then wrap with ArrayBuffer
-        val byteBuffer = ByteBuffer.allocateDirect(bytes.size)
-        byteBuffer.put(bytes)
-        byteBuffer.rewind()
+              // Create destination file
+              val destinationFile = File(context.getExternalFilesDir(null), baseFileName)
 
-        // Create an owning ArrayBuffer by wrapping the ByteBuffer
-        ArrayBuffer.wrap(byteBuffer)
-      } catch (e: Exception) {
-        Log.e(TAG, "Error fetching byte data: ${e.message}", e)
-        throw e
+              if (!destinationFile.parentFile?.exists()!!) {
+                  destinationFile.parentFile?.mkdirs()
+                      ?: throw Error("Failed to create destination directory")
+              }
+
+              if (!destinationFile.exists()) {
+                  Log.i(TAG, "File doesn't exist, copying from source...")
+
+                  when {
+                      source.contains("://") -> {
+                          val uri = Uri.parse(source)
+                          when (uri.scheme) {
+                              "file" -> copyLocalFile(uri, destinationFile)
+                              "http", "https" -> downloadNetworkFile(source, destinationFile)
+                              else -> throw Error("Unsupported URI scheme: ${uri.scheme}")
+                          }
+                      }
+                      // else -> copyFromAssets(context, source, destinationFile)
+                      else -> throw Error("Unsupported source type: $source")
+                  }
+
+                  Log.i(TAG, "File copied successfully to: ${destinationFile.absolutePath}")
+              } else {
+                  Log.i(TAG, "File already exists at destination: ${destinationFile.absolutePath}")
+              }
+
+              destinationFile.absolutePath
+
+          } catch (e: Error) {
+              Log.e(TAG, "Error copying file: ${e.message}", e)
+              throw e  // Re-throw the original Error
+          } catch (e: Exception) {
+              // Wrap any unexpected exceptions in Error for hybrid compatibility
+              val errorMessage = "Unexpected error copying file from $source: ${e.message}"
+              Log.e(TAG, errorMessage, e)
+              throw Error(errorMessage)
+          }
       }
-    }
   }
+
+  private fun copyLocalFile(uri: Uri, destinationFile: File) {
+      try {
+          FileInputStream(File(uri.path ?: throw Error("Invalid file URI")))
+              .use { input ->
+                  FileOutputStream(destinationFile).use { output ->
+                      input.copyTo(output)
+                  }
+              }
+      } catch (e: Exception) {
+          throw Error("Failed to copy local file: ${e.message}")
+      }
+  }
+
+  private fun downloadNetworkFile(source: String, destinationFile: File) {
+      try {
+          val request = Request.Builder().url(source).build()
+          client.newCall(request).execute().use { response ->
+              if (!response.isSuccessful) {
+                  throw Error("HTTP error ${response.code} downloading file from $source")
+              }
+              response.body?.byteStream()?.let { input ->
+                  FileOutputStream(destinationFile).use { output ->
+                      input.copyTo(output)
+                  }
+              } ?: throw Error("Empty response body from $source")
+          }
+      } catch (e: Exception) {
+          throw Error("Failed to download network file: ${e.message}")
+      }
+  }
+
+  // private fun copyFromAssets(context: Context, source: String, destinationFile: File) {
+  //     try {
+  //         context.assets.open(source).use { input ->
+  //             FileOutputStream(destinationFile).use { output ->
+  //                 input.copyTo(output)
+  //             }
+  //         }
+  //     } catch (e: Exception) {
+  //         throw Error("Failed to copy from assets: ${e.message}")
+  //     }
+  // }
 }

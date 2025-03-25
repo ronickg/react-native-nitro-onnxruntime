@@ -94,6 +94,49 @@ namespace margelo::nitro::nitroonnxruntime
     return outputNames_;
   }
 
+  // Helper function to resolve dynamic dimensions
+  std::vector<int64_t> resolveDynamicDimensions(const std::vector<double> &model_dims,
+                                                const std::vector<int64_t> &input_shape)
+  {
+    std::vector<int64_t> resolved_dims(model_dims.size());
+
+    // If input shape is provided and matches the model dimensions count
+    if (!input_shape.empty() && model_dims.size() == input_shape.size())
+    {
+      for (size_t i = 0; i < model_dims.size(); ++i)
+      {
+        if (model_dims[i] < 0)
+        { // Dynamic dimension
+          // Use the concrete value from the input shape
+          resolved_dims[i] = input_shape[i];
+        }
+        else
+        {
+          // Use the model's fixed dimension
+          resolved_dims[i] = static_cast<int64_t>(model_dims[i]);
+        }
+      }
+    }
+    else
+    {
+      // Fallback: if input_shape is not provided or doesn't match, handle dynamic dims with default values
+      for (size_t i = 0; i < model_dims.size(); ++i)
+      {
+        if (model_dims[i] < 0)
+        {
+          // Default batch size to 1 for dynamic batch dimension (typically the first dimension)
+          resolved_dims[i] = (i == 0) ? 1 : 1;
+        }
+        else
+        {
+          resolved_dims[i] = static_cast<int64_t>(model_dims[i]);
+        }
+      }
+    }
+
+    return resolved_dims;
+  }
+
   std::shared_ptr<Promise<std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>>>> InferenceSession::run(
       const std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> &feeds)
   {
@@ -123,12 +166,67 @@ namespace margelo::nitro::nitroonnxruntime
           throw std::runtime_error("Input name not found: " + name);
         }
 
-        // Convert dims from double to int64_t
-        std::vector<int64_t> dims_int64(it->dims.size());
+        // Calculate input shape from buffer size and element type
+        size_t element_size = 0;
+        std::vector<int64_t> input_shape;
+
+        // Get element size based on the type
+        if (it->type == "float32")
+          element_size = sizeof(float);
+        else if (it->type == "int8" || it->type == "bool")
+          element_size = sizeof(int8_t);
+        else if (it->type == "uint8")
+          element_size = sizeof(uint8_t);
+        else if (it->type == "int16")
+          element_size = sizeof(int16_t);
+        else if (it->type == "int32")
+          element_size = sizeof(int32_t);
+        else if (it->type == "int64")
+          element_size = sizeof(int64_t);
+        else if (it->type == "float64")
+          element_size = sizeof(double);
+
+        // Attempt to infer the shape from the buffer size if we have fixed dimensions except for dynamic ones
+        int dynamic_dim_count = 0;
+        int64_t fixed_elements = 1;
+
         for (size_t i = 0; i < it->dims.size(); i++)
         {
-          dims_int64[i] = static_cast<int64_t>(it->dims[i]);
+          if (it->dims[i] < 0)
+          {
+            dynamic_dim_count++;
+          }
+          else
+          {
+            fixed_elements *= static_cast<int64_t>(it->dims[i]);
+          }
         }
+
+        // If there's exactly one dynamic dimension, we can infer its size
+        if (dynamic_dim_count == 1 && element_size > 0 && fixed_elements > 0)
+        {
+          size_t total_elements = byteSize / element_size;
+          int64_t dynamic_dim_size = total_elements / fixed_elements;
+
+          // Populate the input_shape with correct dimensions
+          input_shape.resize(it->dims.size());
+          int dynamic_idx = 0;
+          for (size_t i = 0; i < it->dims.size(); i++)
+          {
+            if (it->dims[i] < 0)
+            {
+              input_shape[i] = dynamic_dim_size;
+              dynamic_idx = i;
+            }
+            else
+            {
+              input_shape[i] = static_cast<int64_t>(it->dims[i]);
+            }
+          }
+        }
+
+        // Resolve any dynamic dimensions in the model
+        std::vector<int64_t> dims_int64 = resolveDynamicDimensions(it->dims, input_shape);
 
         // Create tensor based on type
         if (it->type == "float32")

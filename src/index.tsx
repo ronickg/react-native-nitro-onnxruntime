@@ -22,7 +22,7 @@ type SessionOptions = Omit<
 >;
 
 type Require = number; // ReturnType<typeof require>
-type ModelSource = Require | { url: string };
+type ModelSource = Require | { url: string } | string;
 
 export type OnnxRuntimePlugin =
   | {
@@ -39,7 +39,7 @@ export type OnnxRuntimePlugin =
       state: 'error';
     };
 
-async function loadBufferFromSource(source: ModelSource) {
+export function copyFile(source: ModelSource): Promise<string> {
   let uri: string;
   if (typeof source === 'number') {
     const asset = Image.resolveAssetSource(source);
@@ -51,11 +51,19 @@ async function loadBufferFromSource(source: ModelSource) {
       'Onnx-runtime: Invalid source passed! Source should be either a React Native require(..) or a `{ url: string }` object!'
     );
   }
-  return await assetManager.fetchByteDataFromUrl(uri);
+  return assetManager.copyFile(uri);
 }
 
 async function loadModel(source: ModelSource, options?: SessionOptions) {
-  const buffer = await loadBufferFromSource(source);
+  const path = typeof source === 'string' ? source : await copyFile(source);
+  //@ts-ignore Allowing the use of the SessionOptions type which is fully compatible with the nitro types
+  return ort.loadModel(path, options);
+}
+
+async function loadModelFromBuffer(
+  buffer: ArrayBuffer,
+  options?: SessionOptions
+) {
   //@ts-ignore Allowing the use of the SessionOptions type which is fully compatible with the nitro types
   return ort.loadModelFromBuffer(buffer, options);
 }
@@ -85,7 +93,8 @@ export function useLoadModel(source: ModelSource, options?: SessionOptions) {
 }
 
 export default {
+  ort,
   useLoadModel,
   loadModel,
-  loadBufferFromSource,
+  loadModelFromBuffer,
 };

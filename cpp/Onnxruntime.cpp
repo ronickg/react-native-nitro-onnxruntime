@@ -204,12 +204,12 @@ namespace margelo::nitro::nitroonnxruntime
     }
     catch (const Ort::Exception &e)
     {
-      Logger::log(LogLevel::Error, "Onnxruntime", "Error loading model: %s", e.what());
+      Logger::log(LogLevel::Error, "Onnxruntime", e.what());
       promise->reject(std::make_exception_ptr(e));
     }
     catch (const std::exception &e)
     {
-      Logger::log(LogLevel::Error, "Onnxruntime", "Error loading model: %s", e.what());
+      Logger::log(LogLevel::Error, "Onnxruntime", e.what());
       promise->reject(std::make_exception_ptr(e));
     }
     return promise;
@@ -236,12 +236,12 @@ namespace margelo::nitro::nitroonnxruntime
     }
     catch (const Ort::Exception &e)
     {
-      Logger::log(LogLevel::Error, "Onnxruntime", "Error loading model from buffer: %s", e.what());
+      Logger::log(LogLevel::Error, "Onnxruntime", e.what());
       promise->reject(std::make_exception_ptr(e));
     }
     catch (const std::exception &e)
     {
-      Logger::log(LogLevel::Error, "Onnxruntime", "Error loading model from buffer: %s", e.what());
+      Logger::log(LogLevel::Error, "Onnxruntime", e.what());
       promise->reject(std::make_exception_ptr(e));
     }
     return promise;

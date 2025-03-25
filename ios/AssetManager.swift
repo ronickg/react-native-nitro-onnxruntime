@@ -1,9 +1,3 @@
-// class NitroOnnxruntime: HybridNitroOnnxruntimeSpec {
-//     public func multiply(a: Double, b: Double) throws -> Double {
-//         return a * b
-//     }
-// }
-
 import Foundation
 import NitroModules
 
@@ -13,46 +7,68 @@ public class AssetManager: HybridAssetManagerSpec {
         super.init()
     }
 
-    public func fetchByteDataFromUrl(url: String) throws -> Promise<ArrayBufferHolder> {
+    public func copyFile(source: String) throws -> Promise<String> {
         return Promise.async {
             do {
-                print("Loading byte data from URL: \(url)...")
+                print("Copying file from source: \(source)...")
 
-                var nsURL: URL?
-
-                if url.contains("://") {
-                    // It's a URL
-                    guard let parsedURL = URL(string: url) else {
-                        throw NSError(domain: "AssetManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL: \(url)"])
-                    }
-                    nsURL = parsedURL
-                    print("Parsed URL: \(nsURL!)")
-                } else {
-                    // It's a resource name in the bundle
-                    guard let resourceURL = Bundle.main.url(forResource: url, withExtension: nil) else {
-                        throw NSError(domain: "AssetManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "Resource not found: \(url)"])
-                    }
-                    nsURL = resourceURL
-                    print("Resource URL: \(nsURL!)")
+                // Get the document directory for storing files
+                guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                    throw NSError(domain: "AssetManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to get documents directory"])
                 }
 
-                // Load the data
-                let data: Data
-
-                if nsURL!.isFileURL {
-                    print("It's a file URL")
-                    data = try Data(contentsOf: nsURL!, options: .mappedIfSafe)
+                // Extract the base filename without query parameters
+                let baseFileName: String
+                if source.contains("?") {
+                    let components = source.components(separatedBy: "?")
+                    baseFileName = URL(string: components[0])?.lastPathComponent ?? "unknown_file"
                 } else {
-                    print("It's a network URL/http resource")
-                    data = try Data(contentsOf: nsURL!)
+                    baseFileName = URL(string: source)?.lastPathComponent ?? "unknown_file"
                 }
 
-                // Create ArrayBuffer from Data
-                let buffer = try ArrayBufferHolder.copy(data: data)
+                // Create destination file path
+                let destinationFile = documentsDirectory.appendingPathComponent(baseFileName)
 
-                return buffer
+                // Create parent directory if needed
+                let destinationDirectory = destinationFile.deletingLastPathComponent()
+                try FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
+
+                if !FileManager.default.fileExists(atPath: destinationFile.path) {
+                    print("File doesn't exist, copying from source...")
+
+                    if source.contains("://") {
+                        let url = URL(string: source)!
+
+                        switch url.scheme {
+                        case "file":
+                            // Copy from local file
+                            try FileManager.default.copyItem(at: url, to: destinationFile)
+
+                        case "http", "https":
+                            // Download from network
+                            let data = try Data(contentsOf: url)
+                            try data.write(to: destinationFile)
+
+                        default:
+                            throw NSError(domain: "AssetManager", code: 3, userInfo: [NSLocalizedDescriptionKey: "Unsupported URI scheme: \(url.scheme ?? "unknown")"])
+                        }
+                    } else {
+                        // For direct resource names, we'll look in the bundle
+                        if let resourceURL = Bundle.main.url(forResource: source, withExtension: nil) {
+                            try FileManager.default.copyItem(at: resourceURL, to: destinationFile)
+                        } else {
+                            throw NSError(domain: "AssetManager", code: 4, userInfo: [NSLocalizedDescriptionKey: "Resource not found in bundle: \(source)"])
+                        }
+                    }
+
+                    print("File copied successfully to: \(destinationFile.path)")
+                } else {
+                    print("File already exists at destination: \(destinationFile.path)")
+                }
+
+                return destinationFile.path
             } catch {
-                print("Error fetching byte data: \(error.localizedDescription)")
+                print("Error copying file: \(error.localizedDescription)")
                 throw error
             }
         }

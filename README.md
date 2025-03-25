@@ -12,7 +12,6 @@ npm install react-native-nitro-onnxruntime react-native-nitro-modules
 
 ## Usage
 
-
 ```js
 import { multiply } from 'react-native-nitro-onnxruntime';
 
@@ -20,7 +19,6 @@ import { multiply } from 'react-native-nitro-onnxruntime';
 
 const result = multiply(3, 7);
 ```
-
 
 ## Contributing
 
@@ -33,3 +31,5 @@ MIT
 ---
 
 Made with [create-react-native-library](https://github.com/callstack/react-native-builder-bob)
+
+// For the require -> It copies to file from rn to the files folder in your app. And then just checks if it already exists otherwise copy

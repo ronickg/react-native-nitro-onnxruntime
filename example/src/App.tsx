@@ -7,19 +7,65 @@ import {
   Text,
   View,
 } from 'react-native';
-import ort from 'react-native-nitro-onnxruntime';
 import RNFS from 'react-native-fs';
+import ort from 'react-native-nitro-onnxruntime';
 // @ts-ignore
 import { InferenceSession as OnnxRuntimeInferenceSession } from 'onnxruntime-react-native';
 // @ts-ignore
 import { Tensor } from 'onnxruntime-common';
+import { useEffect, useState } from 'react';
 import { loadTensorflowModel } from 'react-native-fast-tflite';
-import { useState, useEffect } from 'react';
 
 const ModelPath = {
   YOLOV5: `${RNFS.DocumentDirectoryPath}/yolov5s.onnx`,
   YOLOV5_TFLITE: `${RNFS.DocumentDirectoryPath}/yolov5s-fp16.tflite`,
+  EFFICIENTNET_B7: `${RNFS.DocumentDirectoryPath}/efficientnet_b7.onnx`,
+  EFFICIENTNET_B7_TFLITE: `${RNFS.DocumentDirectoryPath}/efficientnet_b7.tflite`,
 };
+
+// //YoloV5
+const RequireModel = {
+  ONNX: {
+    url: require('./yolov5n.onnx'),
+    inputData: {
+      shape: [1, 3, 640, 640],
+      type: 'float32',
+      fill: 0.1,
+      name: 'images',
+    },
+  },
+  TFLITE: {
+    url: require('./yolov5s-fp16.tflite'),
+    inputData: {
+      shape: [1, 640, 640, 3], // TFLite typically uses NHWC format
+      type: 'float32',
+      fill: 0.1,
+      name: 'images',
+    },
+  },
+};
+
+// //efficientnet_b7
+// const RequireModel = {
+//   ONNX: {
+//     url: require('./efficientnet_b7.onnx'),
+//     inputData: {
+//       name: 'input',
+//       shape: [1, 600, 600, 3], // Update to match NHWC format that the model expects
+//       type: 'float32',
+//       fill: 0.1,
+//     },
+//   },
+//   TFLITE: {
+//     url: require('./efficientnet_b7.tflite'),
+//     inputData: {
+//       name: 'input',
+//       shape: [1, 600, 600, 3], // TFLite typically uses NHWC format
+//       type: 'float32',
+//       fill: 0.1,
+//     },
+//   },
+// };
 
 export default function App() {
   const [results, setResults] = useState<{ [key: string]: string }>({});
@@ -50,14 +96,18 @@ export default function App() {
   // Check if models exist
   useEffect(() => {
     const checkModels = async () => {
+      const files = await RNFS.readDir(RNFS.DocumentDirectoryPath);
+      console.log(files);
       const modelsStatus = await Promise.all([
         RNFS.exists(ModelPath.YOLOV5),
         RNFS.exists(ModelPath.YOLOV5_TFLITE),
+        RNFS.exists(ModelPath.EFFICIENTNET_B7),
+        RNFS.exists(ModelPath.EFFICIENTNET_B7_TFLITE),
       ]);
 
       logResult(
         'Models Status',
-        `YOLOv5 ONNX: ${modelsStatus[0] ? '✓' : '✗'}, YOLOv5 TFLite: ${modelsStatus[1] ? '✓' : '✗'}`
+        `YOLOv5 ONNX: ${modelsStatus[0] ? '✓' : '✗'}, YOLOv5 TFLite: ${modelsStatus[1] ? '✓' : '✗'}, EfficientNet B7 ONNX: ${modelsStatus[2] ? '✓' : '✗'}, EfficientNet B7 TFLite: ${modelsStatus[3] ? '✓' : '✗'}`
       );
     };
 
@@ -71,7 +121,7 @@ export default function App() {
       const start = performance.now();
 
       // Note: In a real app, you would have the model in your assets
-      await ort.loadModel(require('./yolov5s.onnx'));
+      await ort.loadModel(RequireModel.ONNX.url);
 
       const end = performance.now();
       logResult(
@@ -102,7 +152,7 @@ export default function App() {
   };
 
   // Test 3: Load model from direct file path
-  const testLoadFromFilePath = async () => {
+  const testLoadFromFilePathURI = async () => {
     try {
       logResult('Load Model', 'Loading YOLOv5 from file path...');
       const start = performance.now();
@@ -113,8 +163,29 @@ export default function App() {
       });
 
       const end = performance.now();
-      logResult('Load from path', `Loaded in ${(end - start).toFixed(2)} ms`);
+      logResult(
+        'Load from path URI',
+        `Loaded in ${(end - start).toFixed(2)} ms`
+      );
     } catch (error) {
+      logResult('Load from URI', `Error: ${(error as Error).message}`);
+    }
+  };
+
+  // Test 4: Load model from direct file path
+  const testLoadFromFilePath = async () => {
+    try {
+      logResult('Load Model', 'Loading YOLOv5 from file path...');
+      const start = performance.now();
+
+      const model = await ort.loadModel(ModelPath.YOLOV5);
+
+      const end = performance.now();
+
+      logResult('Load from path', `Loaded in ${(end - start).toFixed(2)} ms`);
+      model.dispose();
+    } catch (error) {
+      console.log(error);
       logResult('Load from path', `Error: ${(error as Error).message}`);
     }
   };
@@ -153,13 +224,18 @@ export default function App() {
         ];
       }
 
-      const model = await ort.loadModel(require('./yolov5s.onnx'), options);
+      const model = await ort.loadModel(ModelPath.YOLOV5, options);
 
-      // Prepare input data - YOLOv5 takes [1, 3, 640, 640] input
-      const inputData = new Float32Array(1 * 3 * 640 * 640).fill(0.1);
+      console.log(model);
 
+      // Prepare input data using the configuration
+      const { shape, fill } = RequireModel.ONNX.inputData;
+      const totalElements = shape.reduce((a, b) => a * b, 1);
+      const inputData = new Float32Array(totalElements).fill(fill);
+
+      console.log(RequireModel.ONNX.inputData.name);
       // Warm-up run
-      await model.run({ images: inputData.buffer });
+      await model.run({ [RequireModel.ONNX.inputData.name]: inputData.buffer });
 
       // Performance measurement
       const iterations = 5;
@@ -167,13 +243,17 @@ export default function App() {
 
       for (let i = 0; i < iterations; i++) {
         const start = performance.now();
-        await model.run({ images: inputData.buffer });
+        const output = await model.run({
+          [RequireModel.ONNX.inputData.name]: inputData.buffer,
+        });
+        console.log(new Uint8Array(output.output0!).length);
         const end = performance.now();
         totalTime += end - start;
       }
 
       logResult('Nitro ONNX', `Avg: ${(totalTime / iterations).toFixed(2)} ms`);
     } catch (error) {
+      console.log(error);
       logResult('Nitro ONNX', `Error: ${(error as Error).message}`);
     }
   };
@@ -212,16 +292,19 @@ export default function App() {
         ];
       }
 
-      const buffer = await ort.loadBufferFromSource(require('./yolov5s.onnx'));
+      const session = await OnnxRuntimeInferenceSession.create(
+        ModelPath.YOLOV5,
+        options
+      );
 
-      const session = await OnnxRuntimeInferenceSession.create(buffer, options);
-
-      // Prepare input data - YOLOv5 takes [1, 3, 640, 640] input
-      const inputData = new Float32Array(1 * 3 * 640 * 640).fill(0.1);
-      const tensorInput = new Tensor('float32', inputData, [1, 3, 640, 640]);
+      // Prepare input data using the configuration
+      const { shape, fill } = RequireModel.ONNX.inputData;
+      const totalElements = shape.reduce((a, b) => a * b, 1);
+      const inputData = new Float32Array(totalElements).fill(fill);
+      const tensorInput = new Tensor('float32', inputData, shape);
 
       // Warm-up run
-      await session.run({ images: tensorInput });
+      await session.run({ [RequireModel.ONNX.inputData.name]: tensorInput });
 
       // Performance measurement
       const iterations = 5;
@@ -229,7 +312,7 @@ export default function App() {
 
       for (let i = 0; i < iterations; i++) {
         const start = performance.now();
-        await session.run({ images: tensorInput });
+        await session.run({ [RequireModel.ONNX.inputData.name]: tensorInput });
         const end = performance.now();
         totalTime += end - start;
       }
@@ -237,6 +320,7 @@ export default function App() {
       logResult('RN ONNX', `Avg: ${(totalTime / iterations).toFixed(2)} ms`);
       await session.release();
     } catch (error) {
+      console.log(error);
       logResult('RN ONNX', `Error: ${(error as Error).message}`);
     }
   };
@@ -252,7 +336,7 @@ export default function App() {
 
       // Note: In a real app, this would be a valid asset
       const model = await loadTensorflowModel(
-        require('./yolov5s-fp16.tflite'),
+        RequireModel.TFLITE.url,
         Platform.OS === 'android'
           ? modelOptions.useNNAPI
             ? 'nnapi'
@@ -262,8 +346,10 @@ export default function App() {
             : 'default'
       );
 
-      // Prepare input data (TFLite typically uses NHWC format)
-      const inputData = new Float32Array(1 * 640 * 640 * 3).fill(0.1);
+      // Prepare input data using the configuration
+      const { shape, fill } = RequireModel.TFLITE.inputData;
+      const totalElements = shape.reduce((a, b) => a * b, 1);
+      const inputData = new Float32Array(totalElements).fill(fill);
 
       // Warm-up run
       await model.run([inputData]);
@@ -292,9 +378,10 @@ export default function App() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Model Loading Tests</Text>
           <View style={{ flexDirection: 'row', gap: 16 }}>
+            <Button title="file" onPress={testLoadFromFilePath} />
             <Button title="require()" onPress={testLoadFromRequire} />
             <Button title="url" onPress={testLoadFromURL} />
-            <Button title="file://" onPress={testLoadFromFilePath} />
+            <Button title="file://" onPress={testLoadFromFilePathURI} />
           </View>
         </View>
 
