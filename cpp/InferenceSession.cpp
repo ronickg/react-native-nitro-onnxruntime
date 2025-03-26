@@ -328,7 +328,15 @@ namespace margelo::nitro::nitroonnxruntime
         size_t byteSize = elementCount * elementSize;
 
         // Create a new owning buffer for the output data
-        auto buffer = ArrayBuffer::allocate(byteSize);
+        uint8_t *data = new uint8_t[byteSize];
+        auto buffer = std::make_shared<margelo::nitro::NativeArrayBuffer>(
+            data,
+            byteSize,
+            [data]()
+            {
+              // This delete function will be called when the NativeArrayBuffer is destroyed
+              delete[] data;
+            });
         std::memcpy(buffer->data(), outputData, byteSize);
 
         results.emplace(outputNames_[i].name, buffer);
