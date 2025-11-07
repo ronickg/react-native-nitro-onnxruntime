@@ -1,7 +1,7 @@
 {
   "name": "react-native-nitro-onnxruntime",
-  "version": "0.1.0",
-  "description": "bob",
+  "version": "0.0.0",
+  "description": "High-performance ONNX Runtime bindings for React Native with hardware acceleration support (NNAPI, CoreML, XNNPACK)",
   "source": "./src/index.tsx",
   "main": "./lib/commonjs/index.js",
   "module": "./lib/module/index.js",
@@ -50,7 +50,20 @@
   "keywords": [
     "react-native",
     "ios",
-    "android"
+    "android",
+    "onnx",
+    "onnxruntime",
+    "machine-learning",
+    "ml",
+    "ai",
+    "inference",
+    "neural-network",
+    "nnapi",
+    "coreml",
+    "xnnpack",
+    "nitro-modules",
+    "hardware-acceleration",
+    "deep-learning"
   ],
   "repository": {
     "type": "git",
