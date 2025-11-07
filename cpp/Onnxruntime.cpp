@@ -176,7 +176,14 @@ namespace margelo::nitro::nitroonnxruntime
             if (providerOptions.cpuOnly.has_value() && providerOptions.cpuOnly.value())
               nnapi_flags |= NNAPI_FLAG_CPU_ONLY;
 
-            OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions, nnapi_flags);
+            OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions, nnapi_flags);
+            if (status != nullptr)
+            {
+              const char* error_message = Ort::GetApi().GetErrorMessage(status);
+              std::string error_str = "Failed to append NNAPI execution provider: " + std::string(error_message);
+              Ort::GetApi().ReleaseStatus(status);
+              throw std::runtime_error(error_str);
+            }
 #else
             throw std::runtime_error("NNAPI provider requested but not supported on this platform");
 #endif
