@@ -121,7 +121,19 @@ namespace margelo::nitro::nitroonnxruntime
           }
           else if (providerName == "nnapi")
           {
-            sessionOptions.AppendExecutionProvider("NNAPI", {});
+#if defined(__ANDROID__)
+            // Use the specialized NNAPI function with default flags
+            OrtStatus* status = OrtSessionOptionsAppendExecutionProvider_Nnapi(sessionOptions, 0);
+            if (status != nullptr)
+            {
+              const char* error_message = Ort::GetApi().GetErrorMessage(status);
+              std::string error_str = "Failed to append NNAPI execution provider: " + std::string(error_message);
+              Ort::GetApi().ReleaseStatus(status);
+              throw std::runtime_error(error_str);
+            }
+#else
+            throw std::runtime_error("NNAPI provider requested but not supported on this platform");
+#endif
           }
           else
           {

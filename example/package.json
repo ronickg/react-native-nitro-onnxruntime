@@ -10,12 +10,11 @@
     "build:ios": "react-native build-ios --scheme NitroOnnxruntimeExample --mode Debug --extra-params \"-sdk iphonesimulator CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++ GCC_OPTIMIZATION_LEVEL=0 GCC_PRECOMPILE_PREFIX_HEADER=YES ASSETCATALOG_COMPILER_OPTIMIZATION=time DEBUG_INFORMATION_FORMAT=dwarf COMPILER_INDEX_STORE_ENABLE=NO\""
   },
   "dependencies": {
-    "onnxruntime-react-native": "^1.21.0",
     "react": "19.0.0",
     "react-native": "0.78.1",
     "react-native-fast-tflite": "https://github.com/mrousavy/react-native-fast-tflite",
     "react-native-fs": "^2.20.0",
-    "react-native-nitro-modules": "^0.22.1"
+    "react-native-nitro-modules": "^0.31.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

@@ -210,13 +210,11 @@ namespace margelo::nitro::nitroonnxruntime
 
           // Populate the input_shape with correct dimensions
           input_shape.resize(it->dims.size());
-          int dynamic_idx = 0;
           for (size_t i = 0; i < it->dims.size(); i++)
           {
             if (it->dims[i] < 0)
             {
               input_shape[i] = dynamic_dim_size;
-              dynamic_idx = i;
             }
             else
             {

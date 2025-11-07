@@ -79,7 +79,9 @@ const runOnnxModelTest = async (modelName: string, config: ModelConfig) => {
   console.log(`Testing ${modelName} (ONNX)`);
   try {
     const loadStart = performance.now();
-    const session = await ort.loadModel(config.url);
+    const session = await ort.loadModel(config.url, {
+      executionProviders: [{ name: 'nnapi', useFP16: true, cpuDisabled: true }],
+    });
     const loadTime = performance.now() - loadStart;
 
     console.log(`Input names: ${JSON.stringify(session.inputNames)}`);
