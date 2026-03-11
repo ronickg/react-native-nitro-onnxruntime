@@ -33,9 +33,9 @@ export interface InferenceSession
   extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
   readonly inputNames: Tensor[];
   readonly outputNames: Tensor[];
-  run(
+  run(feeds: Record<string, ArrayBuffer>): Record<string, ArrayBuffer>;
+  runAsync(
     feeds: Record<string, ArrayBuffer>
-    // options: RunOptions
   ): Promise<Record<string, ArrayBuffer>>;
 }
 

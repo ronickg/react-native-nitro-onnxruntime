@@ -1,5 +1,9 @@
 import { NitroModules } from 'react-native-nitro-modules';
-import type { Onnxruntime, AssetManager } from './Onnxruntime.nitro';
+import type {
+  Onnxruntime,
+  AssetManager,
+  InferenceSession as NitroInferenceSession,
+} from './Onnxruntime.nitro';
 import type { InferenceSession } from 'onnxruntime-common';
 import { Image } from 'react-native';
 import { useEffect, useState } from 'react';
@@ -26,7 +30,7 @@ type ModelSource = Require | { url: string } | string;
 
 export type OnnxRuntimePlugin =
   | {
-      model: InferenceSession;
+      model: NitroInferenceSession;
       state: 'loaded';
     }
   | {

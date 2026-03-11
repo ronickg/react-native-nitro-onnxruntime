@@ -74,11 +74,9 @@ namespace margelo::nitro::nitroonnxruntime
   Ort::Value createTensor(Ort::MemoryInfo &memoryInfo, const void *data, size_t byteSize,
                           const std::vector<int64_t> &dims)
   {
-    T *buffer = new T[byteSize / sizeof(T)];
-    std::memcpy(buffer, data, byteSize);
     return Ort::Value::CreateTensor<T>(
         memoryInfo,
-        buffer,
+        static_cast<T *>(const_cast<void *>(data)),
         byteSize / sizeof(T),
         dims.data(),
         dims.size());
@@ -137,209 +135,212 @@ namespace margelo::nitro::nitroonnxruntime
     return resolved_dims;
   }
 
-  std::shared_ptr<Promise<std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>>>> InferenceSession::run(
+  std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> InferenceSession::run(
+      const std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> &feeds)
+  {
+    Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    std::vector<const char *> inputNames;
+    std::vector<Ort::Value> inputTensors;
+
+    // Prepare inputs
+    for (const auto &[name, buffer] : feeds)
+    {
+      inputNames.push_back(name.c_str());
+
+      const void *data = buffer->data();
+      size_t byteSize = buffer->size();
+
+      // Find corresponding input tensor info
+      auto it = std::find_if(inputNames_.begin(), inputNames_.end(),
+                             [&name](const Tensor &t)
+                             { return t.name == name; });
+      if (it == inputNames_.end())
+      {
+        throw std::runtime_error("Input name not found: " + name);
+      }
+
+      // Calculate input shape from buffer size and element type
+      size_t element_size = 0;
+      std::vector<int64_t> input_shape;
+
+      // Get element size based on the type
+      if (it->type == "float32")
+        element_size = sizeof(float);
+      else if (it->type == "int8" || it->type == "bool")
+        element_size = sizeof(int8_t);
+      else if (it->type == "uint8")
+        element_size = sizeof(uint8_t);
+      else if (it->type == "int16")
+        element_size = sizeof(int16_t);
+      else if (it->type == "int32")
+        element_size = sizeof(int32_t);
+      else if (it->type == "int64")
+        element_size = sizeof(int64_t);
+      else if (it->type == "float64")
+        element_size = sizeof(double);
+
+      // Attempt to infer the shape from the buffer size if we have fixed dimensions except for dynamic ones
+      int dynamic_dim_count = 0;
+      int64_t fixed_elements = 1;
+
+      for (size_t i = 0; i < it->dims.size(); i++)
+      {
+        if (it->dims[i] < 0)
+        {
+          dynamic_dim_count++;
+        }
+        else
+        {
+          fixed_elements *= static_cast<int64_t>(it->dims[i]);
+        }
+      }
+
+      // If there's exactly one dynamic dimension, we can infer its size
+      if (dynamic_dim_count == 1 && element_size > 0 && fixed_elements > 0)
+      {
+        size_t total_elements = byteSize / element_size;
+        int64_t dynamic_dim_size = total_elements / fixed_elements;
+
+        input_shape.resize(it->dims.size());
+        for (size_t i = 0; i < it->dims.size(); i++)
+        {
+          if (it->dims[i] < 0)
+          {
+            input_shape[i] = dynamic_dim_size;
+          }
+          else
+          {
+            input_shape[i] = static_cast<int64_t>(it->dims[i]);
+          }
+        }
+      }
+
+      // Resolve any dynamic dimensions in the model
+      std::vector<int64_t> dims_int64 = resolveDynamicDimensions(it->dims, input_shape);
+
+      // Create tensor based on type
+      if (it->type == "float32")
+      {
+        inputTensors.push_back(createTensor<float>(memoryInfo, data, byteSize, dims_int64));
+      }
+      else if (it->type == "int8" || it->type == "bool")
+      {
+        inputTensors.push_back(createTensor<int8_t>(memoryInfo, data, byteSize, dims_int64));
+      }
+      else if (it->type == "uint8")
+      {
+        inputTensors.push_back(createTensor<uint8_t>(memoryInfo, data, byteSize, dims_int64));
+      }
+      else if (it->type == "int16")
+      {
+        inputTensors.push_back(createTensor<int16_t>(memoryInfo, data, byteSize, dims_int64));
+      }
+      else if (it->type == "int32")
+      {
+        inputTensors.push_back(createTensor<int32_t>(memoryInfo, data, byteSize, dims_int64));
+      }
+      else if (it->type == "int64")
+      {
+        inputTensors.push_back(createTensor<int64_t>(memoryInfo, data, byteSize, dims_int64));
+      }
+      else if (it->type == "float64")
+      {
+        inputTensors.push_back(createTensor<double>(memoryInfo, data, byteSize, dims_int64));
+      }
+      else
+      {
+        throw std::runtime_error("Unsupported tensor type: " + it->type);
+      }
+    }
+
+    // Prepare output names
+    std::vector<const char *> outputNamesC;
+    for (const auto &tensor : outputNames_)
+    {
+      outputNamesC.push_back(tensor.name.c_str());
+    }
+
+    // Run inference
+    auto outputTensors = session_->Run(Ort::RunOptions{nullptr},
+                                       inputNames.data(), inputTensors.data(), inputTensors.size(),
+                                       outputNamesC.data(), outputNamesC.size());
+
+    // Process output
+    std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> results;
+    for (size_t i = 0; i < outputTensors.size(); ++i)
+    {
+      auto tensorInfo = outputTensors[i].GetTensorTypeAndShapeInfo();
+      size_t elementCount = tensorInfo.GetElementCount();
+      size_t elementSize;
+      const void *outputData;
+
+      // Get the correct data pointer and element size based on type
+      if (outputNames_[i].type == "float32")
+      {
+        outputData = outputTensors[i].GetTensorMutableData<float>();
+        elementSize = sizeof(float);
+      }
+      else if (outputNames_[i].type == "int8" || outputNames_[i].type == "bool")
+      {
+        outputData = outputTensors[i].GetTensorMutableData<int8_t>();
+        elementSize = sizeof(int8_t);
+      }
+      else if (outputNames_[i].type == "uint8")
+      {
+        outputData = outputTensors[i].GetTensorMutableData<uint8_t>();
+        elementSize = sizeof(uint8_t);
+      }
+      else if (outputNames_[i].type == "int16")
+      {
+        outputData = outputTensors[i].GetTensorMutableData<int16_t>();
+        elementSize = sizeof(int16_t);
+      }
+      else if (outputNames_[i].type == "int32")
+      {
+        outputData = outputTensors[i].GetTensorMutableData<int32_t>();
+        elementSize = sizeof(int32_t);
+      }
+      else if (outputNames_[i].type == "int64")
+      {
+        outputData = outputTensors[i].GetTensorMutableData<int64_t>();
+        elementSize = sizeof(int64_t);
+      }
+      else if (outputNames_[i].type == "float64")
+      {
+        outputData = outputTensors[i].GetTensorMutableData<double>();
+        elementSize = sizeof(double);
+      }
+      else
+      {
+        throw std::runtime_error("Unsupported output tensor type: " + outputNames_[i].type);
+      }
+
+      size_t byteSize = elementCount * elementSize;
+
+      // Zero-copy: move the Ort::Value into the destructor to keep it alive
+      auto ortValue = std::make_shared<Ort::Value>(std::move(outputTensors[i]));
+      auto buffer = std::make_shared<margelo::nitro::NativeArrayBuffer>(
+          static_cast<uint8_t *>(const_cast<void *>(outputData)),
+          byteSize,
+          [ortValue]()
+          {
+            // ortValue captured to prevent ORT from freeing the data
+          });
+
+      results.emplace(outputNames_[i].name, buffer);
+    }
+
+    return results;
+  }
+
+  std::shared_ptr<Promise<std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>>>> InferenceSession::runAsync(
       const std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> &feeds)
   {
     auto promise = Promise<std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>>>::create();
 
     try
     {
-      Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-      std::vector<const char *> inputNames;
-      std::vector<Ort::Value> inputTensors;
-
-      // Prepare inputs
-      for (const auto &[name, buffer] : feeds)
-      {
-        inputNames.push_back(name.c_str());
-
-        // Since this is a non-owning buffer from JS, we need to access it safely within the sync call
-        const void *data = buffer->data();
-        size_t byteSize = buffer->size();
-
-        // Find corresponding input tensor info
-        auto it = std::find_if(inputNames_.begin(), inputNames_.end(),
-                               [&name](const Tensor &t)
-                               { return t.name == name; });
-        if (it == inputNames_.end())
-        {
-          throw std::runtime_error("Input name not found: " + name);
-        }
-
-        // Calculate input shape from buffer size and element type
-        size_t element_size = 0;
-        std::vector<int64_t> input_shape;
-
-        // Get element size based on the type
-        if (it->type == "float32")
-          element_size = sizeof(float);
-        else if (it->type == "int8" || it->type == "bool")
-          element_size = sizeof(int8_t);
-        else if (it->type == "uint8")
-          element_size = sizeof(uint8_t);
-        else if (it->type == "int16")
-          element_size = sizeof(int16_t);
-        else if (it->type == "int32")
-          element_size = sizeof(int32_t);
-        else if (it->type == "int64")
-          element_size = sizeof(int64_t);
-        else if (it->type == "float64")
-          element_size = sizeof(double);
-
-        // Attempt to infer the shape from the buffer size if we have fixed dimensions except for dynamic ones
-        int dynamic_dim_count = 0;
-        int64_t fixed_elements = 1;
-
-        for (size_t i = 0; i < it->dims.size(); i++)
-        {
-          if (it->dims[i] < 0)
-          {
-            dynamic_dim_count++;
-          }
-          else
-          {
-            fixed_elements *= static_cast<int64_t>(it->dims[i]);
-          }
-        }
-
-        // If there's exactly one dynamic dimension, we can infer its size
-        if (dynamic_dim_count == 1 && element_size > 0 && fixed_elements > 0)
-        {
-          size_t total_elements = byteSize / element_size;
-          int64_t dynamic_dim_size = total_elements / fixed_elements;
-
-          // Populate the input_shape with correct dimensions
-          input_shape.resize(it->dims.size());
-          for (size_t i = 0; i < it->dims.size(); i++)
-          {
-            if (it->dims[i] < 0)
-            {
-              input_shape[i] = dynamic_dim_size;
-            }
-            else
-            {
-              input_shape[i] = static_cast<int64_t>(it->dims[i]);
-            }
-          }
-        }
-
-        // Resolve any dynamic dimensions in the model
-        std::vector<int64_t> dims_int64 = resolveDynamicDimensions(it->dims, input_shape);
-
-        // Create tensor based on type
-        if (it->type == "float32")
-        {
-          inputTensors.push_back(createTensor<float>(memoryInfo, data, byteSize, dims_int64));
-        }
-        else if (it->type == "int8" || it->type == "bool")
-        {
-          inputTensors.push_back(createTensor<int8_t>(memoryInfo, data, byteSize, dims_int64));
-        }
-        else if (it->type == "uint8")
-        {
-          inputTensors.push_back(createTensor<uint8_t>(memoryInfo, data, byteSize, dims_int64));
-        }
-        else if (it->type == "int16")
-        {
-          inputTensors.push_back(createTensor<int16_t>(memoryInfo, data, byteSize, dims_int64));
-        }
-        else if (it->type == "int32")
-        {
-          inputTensors.push_back(createTensor<int32_t>(memoryInfo, data, byteSize, dims_int64));
-        }
-        else if (it->type == "int64")
-        {
-          inputTensors.push_back(createTensor<int64_t>(memoryInfo, data, byteSize, dims_int64));
-        }
-        else if (it->type == "float64")
-        {
-          inputTensors.push_back(createTensor<double>(memoryInfo, data, byteSize, dims_int64));
-        }
-        else
-        {
-          throw std::runtime_error("Unsupported tensor type: " + it->type);
-        }
-      }
-
-      // Prepare output names
-      std::vector<const char *> outputNamesC;
-      for (const auto &tensor : outputNames_)
-      {
-        outputNamesC.push_back(tensor.name.c_str());
-      }
-
-      // Run inference
-      auto outputTensors = session_->Run(Ort::RunOptions{nullptr},
-                                         inputNames.data(), inputTensors.data(), inputTensors.size(),
-                                         outputNamesC.data(), outputNamesC.size());
-
-      // Process output
-      std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> results;
-      for (size_t i = 0; i < outputTensors.size(); ++i)
-      {
-        auto tensorInfo = outputTensors[i].GetTensorTypeAndShapeInfo();
-        size_t elementCount = tensorInfo.GetElementCount();
-        size_t elementSize;
-        const void *outputData;
-
-        // Get the correct data pointer and element size based on type
-        if (outputNames_[i].type == "float32")
-        {
-          outputData = outputTensors[i].GetTensorMutableData<float>();
-          elementSize = sizeof(float);
-        }
-        else if (outputNames_[i].type == "int8" || outputNames_[i].type == "bool")
-        {
-          outputData = outputTensors[i].GetTensorMutableData<int8_t>();
-          elementSize = sizeof(int8_t);
-        }
-        else if (outputNames_[i].type == "uint8")
-        {
-          outputData = outputTensors[i].GetTensorMutableData<uint8_t>();
-          elementSize = sizeof(uint8_t);
-        }
-        else if (outputNames_[i].type == "int16")
-        {
-          outputData = outputTensors[i].GetTensorMutableData<int16_t>();
-          elementSize = sizeof(int16_t);
-        }
-        else if (outputNames_[i].type == "int32")
-        {
-          outputData = outputTensors[i].GetTensorMutableData<int32_t>();
-          elementSize = sizeof(int32_t);
-        }
-        else if (outputNames_[i].type == "int64")
-        {
-          outputData = outputTensors[i].GetTensorMutableData<int64_t>();
-          elementSize = sizeof(int64_t);
-        }
-        else if (outputNames_[i].type == "float64")
-        {
-          outputData = outputTensors[i].GetTensorMutableData<double>();
-          elementSize = sizeof(double);
-        }
-        else
-        {
-          throw std::runtime_error("Unsupported output tensor type: " + outputNames_[i].type);
-        }
-
-        size_t byteSize = elementCount * elementSize;
-
-        // Create a new owning buffer for the output data
-        uint8_t *data = new uint8_t[byteSize];
-        auto buffer = std::make_shared<margelo::nitro::NativeArrayBuffer>(
-            data,
-            byteSize,
-            [data]()
-            {
-              // This delete function will be called when the NativeArrayBuffer is destroyed
-              delete[] data;
-            });
-        std::memcpy(buffer->data(), outputData, byteSize);
-
-        results.emplace(outputNames_[i].name, buffer);
-      }
-
+      auto results = run(feeds);
       promise->resolve(results);
     }
     catch (const Ort::Exception &e)

@@ -31,7 +31,9 @@ namespace margelo::nitro::nitroonnxruntime
     // Implementation of pure virtual methods from spec
     std::vector<Tensor> getInputNames() override;
     std::vector<Tensor> getOutputNames() override;
-    std::shared_ptr<Promise<std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>>>> run(
+    std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> run(
+        const std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> &feeds) override;
+    std::shared_ptr<Promise<std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>>>> runAsync(
         const std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> &feeds) override;
     void dispose() override;
 

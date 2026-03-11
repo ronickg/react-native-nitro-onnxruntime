@@ -14,7 +14,7 @@
     "react-native": "0.78.1",
     "react-native-fast-tflite": "https://github.com/mrousavy/react-native-fast-tflite",
     "react-native-fs": "^2.20.0",
-    "react-native-nitro-modules": "^0.31.4"
+    "react-native-nitro-modules": "^0.35.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
