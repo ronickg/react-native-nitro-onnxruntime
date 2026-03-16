@@ -1,5 +1,5 @@
 import { Button, Platform, ScrollView, Text, View } from 'react-native';
-import ort from 'react-native-nitro-onnxruntime';
+import { createModelLoader } from 'react-native-nitro-onnxruntime';
 // import {
 //   loadTensorflowModel,
 //   type TensorflowModel,
@@ -11,7 +11,7 @@ import { InferenceSession } from 'onnxruntime-react-native';
 import { Tensor } from 'onnxruntime-common';
 
 interface ModelConfig {
-  url: string;
+  url: number | string;
   shape?: number[];
 }
 
@@ -79,8 +79,14 @@ const runOnnxModelTest = async (modelName: string, config: ModelConfig) => {
   console.log(`Testing ${modelName} (ONNX)`);
   try {
     const loadStart = performance.now();
-    const session = await ort.loadModel(config.url, {
-      executionProviders: [{ name: 'nnapi', useFP16: true, cpuDisabled: true }],
+    const source =
+      typeof config.url === 'string' ? { filePath: config.url } : config.url;
+    const session = await createModelLoader(source, {
+      executionProviders: [
+        Platform.OS === 'ios'
+          ? { name: 'coreml' }
+          : { name: 'nnapi', useFP16: true, cpuDisabled: true },
+      ],
     });
     const loadTime = performance.now() - loadStart;
 

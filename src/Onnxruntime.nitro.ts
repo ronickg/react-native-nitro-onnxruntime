@@ -17,7 +17,7 @@ interface ProviderOptions {
 }
 
 type ExecutionProvider = string | ProviderOptions;
-interface SessionOptions {
+export interface SessionOptions {
   intraOpNumThreads?: number;
   interOpNumThreads?: number;
   graphOptimizationLevel?: string;
@@ -55,7 +55,9 @@ export interface Onnxruntime
   ): Promise<InferenceSession>;
 }
 
-export interface AssetManager
+export interface ModelLoaderFactory
   extends HybridObject<{ ios: 'swift'; android: 'kotlin' }> {
-  copyFile(source: string): Promise<string>;
+  createFileModelLoader(filePath: string): Promise<string>;
+  createResourceModelLoader(name: string): Promise<string>;
+  createUrlModelLoader(url: string): Promise<string>;
 }

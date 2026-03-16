@@ -4,12 +4,12 @@ High-performance ONNX Runtime bindings for React Native, built with [Nitro Modul
 
 ## Features
 
-- ⚡ **Blazing Fast**: Built with Nitro Modules for zero-overhead JSI bindings
-- 🎯 **Hardware Acceleration**: Support for NNAPI (Android), CoreML (iOS), and XNNPACK
-- 🔄 **Modern API**: Promise-based async API with TypeScript support
-- 📦 **Flexible Model Loading**: Load models from files, URLs, or buffers
-- 🎨 **Full Type Support**: Complete TypeScript definitions
-- 🔧 **Configurable**: Extensive session options for optimization
+- **Blazing Fast**: Built with Nitro Modules for zero-overhead JSI bindings
+- **Hardware Acceleration**: Support for NNAPI (Android), CoreML (iOS), and XNNPACK
+- **Modern API**: Promise-based async API with TypeScript support
+- **Flexible Model Loading**: Load models from files, URLs, resources, or `require()`
+- **Full Type Support**: Complete TypeScript definitions
+- **Configurable**: Extensive session options for optimization
 
 ## Installation
 
@@ -24,22 +24,22 @@ npm install react-native-nitro-onnxruntime react-native-nitro-modules
 ### Basic Example
 
 ```typescript
-import ort from 'react-native-nitro-onnxruntime';
+import { createModelLoader } from 'react-native-nitro-onnxruntime';
 
 // Load a model
-const session = await ort.loadModel('path/to/model.onnx');
+const session = await createModelLoader(require('./assets/model.onnx'));
 
 // Get input/output information
 console.log('Inputs:', session.inputNames);
 console.log('Outputs:', session.outputNames);
 
 // Prepare input data
-const inputData = new Float32Array(1 * 3 * 224 * 224); // Batch=1, Channels=3, Height=224, Width=224
+const inputData = new Float32Array(1 * 3 * 224 * 224);
 // ... fill inputData with your data
 
 // Run inference
-const results = await session.run({
-  [session.inputNames[0].name]: inputData.buffer
+const results = session.run({
+  [session.inputNames[0].name]: inputData.buffer,
 });
 
 // Access output
@@ -48,163 +48,130 @@ const outputData = new Float32Array(outputBuffer);
 console.log('Output:', outputData);
 ```
 
-### Loading Models from Assets
+### Model Sources
 
-Models can be loaded using `require()` for bundled assets. The library automatically copies the model from your app bundle to the device's file system and caches it:
-
-```typescript
-// Load from bundled asset
-const session = await ort.loadModel(require('./assets/model.onnx'));
-```
-
-You can also load from a URL:
+Models can be loaded from various sources using `createModelLoader()`:
 
 ```typescript
-// Load from URL
-const session = await ort.loadModel({
-  url: 'http://example.com/model.onnx'
-});
+import { createModelLoader } from 'react-native-nitro-onnxruntime';
+
+// From bundled asset (require)
+const session = await createModelLoader(require('./assets/model.onnx'));
+
+// From file path
+const session = await createModelLoader({ filePath: '/path/to/model.onnx' });
+
+// From URL (downloaded and cached)
+const session = await createModelLoader({ url: 'https://example.com/model.onnx' });
+
+// From bundle resource
+const session = await createModelLoader({ resource: 'model.onnx' });
 ```
 
-Or from a file path:
+When using `require()`, the library automatically resolves the asset for both debug (metro HTTP) and release (embedded file/resource) builds — following the same pattern as [react-native-nitro-image](https://github.com/margelo/react-native-nitro-image).
 
-```typescript
-// Load from file path
-const session = await ort.loadModel('/path/to/model.onnx');
-```
-
-**Note:** When using `require()` or `{ url }`, the model is automatically copied to the app's files directory and cached. Subsequent loads will use the cached file for faster initialization.
+All file-based sources are copied to the app's documents directory and cached. Subsequent loads use the cached file.
 
 ### Hardware Acceleration
 
 #### Android (NNAPI)
 
 ```typescript
-const session = await ort.loadModel('model.onnx', {
-  executionProviders: ['nnapi']
+const session = await createModelLoader(require('./model.onnx'), {
+  executionProviders: ['nnapi'],
 });
 
 // Or with options
-const session = await ort.loadModel('model.onnx', {
-  executionProviders: [{
-    name: 'nnapi',
-    useFP16: true,        // Use FP16 precision
-    cpuDisabled: true,    // Disable CPU fallback
-  }]
+const session = await createModelLoader(require('./model.onnx'), {
+  executionProviders: [
+    {
+      name: 'nnapi',
+      useFP16: true,
+      cpuDisabled: true,
+    },
+  ],
 });
 ```
 
 #### iOS (CoreML)
 
 ```typescript
-const session = await ort.loadModel('model.onnx', {
-  executionProviders: ['coreml']
+const session = await createModelLoader(require('./model.onnx'), {
+  executionProviders: ['coreml'],
 });
 
 // Or with options
-const session = await ort.loadModel('model.onnx', {
-  executionProviders: [{
-    name: 'coreml',
-    useCPUOnly: false,
-    onlyEnableDeviceWithANE: true,  // Only use devices with Apple Neural Engine
-  }]
+const session = await createModelLoader(require('./model.onnx'), {
+  executionProviders: [
+    {
+      name: 'coreml',
+      useCPUOnly: false,
+      onlyEnableDeviceWithANE: true,
+    },
+  ],
 });
 ```
 
 #### XNNPACK (Cross-platform)
 
 ```typescript
-const session = await ort.loadModel('model.onnx', {
-  executionProviders: ['xnnpack']
+const session = await createModelLoader(require('./model.onnx'), {
+  executionProviders: ['xnnpack'],
 });
 ```
 
 ### Advanced Configuration
 
 ```typescript
-const session = await ort.loadModel('model.onnx', {
+const session = await createModelLoader(require('./model.onnx'), {
   // Thread configuration
   intraOpNumThreads: 4,
   interOpNumThreads: 2,
-  
+
   // Graph optimization
   graphOptimizationLevel: 'all', // 'disabled' | 'basic' | 'extended' | 'all'
-  
+
   // Memory settings
   enableCpuMemArena: true,
   enableMemPattern: true,
-  
+
   // Execution mode
   executionMode: 'sequential', // 'sequential' | 'parallel'
-  
+
   // Logging
   logId: 'MyModel',
   logSeverityLevel: 2, // 0=Verbose, 1=Info, 2=Warning, 3=Error, 4=Fatal
-  
+
   // Execution providers
-  executionProviders: ['nnapi', 'cpu']
+  executionProviders: ['nnapi', 'cpu'],
 });
 ```
 
-### Loading from Buffer
-
-For advanced use cases, you can load models directly from an ArrayBuffer:
-
-```typescript
-import RNFS from 'react-native-fs';
-
-// Option 1: Load from file system
-const modelPath = 'path/to/model.onnx';
-const base64Data = await RNFS.readFile(modelPath, 'base64');
-const arrayBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0)).buffer;
-
-const session = await ort.loadModelFromBuffer(arrayBuffer, {
-  executionProviders: ['nnapi']
-});
-
-// Option 2: Load from network
-const response = await fetch('https://example.com/model.onnx');
-const arrayBuffer = await response.arrayBuffer();
-
-const session = await ort.loadModelFromBuffer(arrayBuffer, {
-  executionProviders: ['coreml']
-});
-```
-
-**Use cases for `loadModelFromBuffer`:**
-- Loading models from encrypted storage
-- Downloading models from authenticated endpoints
-- Processing models before loading (e.g., decompression)
-- Dynamic model generation
-
-### React Hooks
+### React Hook
 
 The library provides a convenient React hook for loading models:
 
 ```typescript
-import { useLoadModel } from 'react-native-nitro-onnxruntime';
+import { useModelLoader } from 'react-native-nitro-onnxruntime';
 
 function MyComponent() {
-  const modelState = useLoadModel(require('./assets/model.onnx'), {
-    executionProviders: ['nnapi']
+  const { state, model, error } = useModelLoader(require('./assets/model.onnx'), {
+    executionProviders: ['nnapi'],
   });
 
-  if (modelState.state === 'loading') {
+  if (state === 'loading') {
     return <Text>Loading model...</Text>;
   }
 
-  if (modelState.state === 'error') {
-    return <Text>Error: {modelState.error.message}</Text>;
+  if (state === 'error') {
+    return <Text>Error: {error.message}</Text>;
   }
 
-  // modelState.state === 'loaded'
-  const session = modelState.model;
-  
-  // Use session for inference
+  // state === 'ready'
   const runInference = async () => {
     const input = new Float32Array(224 * 224 * 3);
-    const results = await session.run({
-      [session.inputNames[0].name]: input.buffer
+    const results = model.run({
+      [model.inputNames[0].name]: input.buffer,
     });
   };
 
@@ -212,140 +179,117 @@ function MyComponent() {
 }
 ```
 
-### Memory Management
+### Loading from Buffer
 
-Sessions are automatically cleaned up by Nitro Modules when they go out of scope. However, you can manually dispose of a session to free memory immediately:
+For advanced use cases (encrypted storage, authenticated endpoints, decompression), you can load models directly from an ArrayBuffer using the `OnnxRuntimes` object:
 
 ```typescript
-// Optional: Dispose of session early to free memory immediately
+import { OnnxRuntimes } from 'react-native-nitro-onnxruntime';
+
+const response = await fetch('https://example.com/model.onnx');
+const arrayBuffer = await response.arrayBuffer();
+
+const session = await OnnxRuntimes.loadModelFromBuffer(arrayBuffer, {
+  executionProviders: ['coreml'],
+});
+```
+
+### Memory Management
+
+Sessions are automatically cleaned up by Nitro Modules when they go out of scope. You can manually dispose of a session to free memory immediately:
+
+```typescript
 session.dispose();
 ```
 
-**When to call `dispose()`:**
-- Loading multiple models and want to free memory between loads
-- Memory-constrained environments
-- Want immediate cleanup instead of waiting for garbage collection
-
-**Note:** You don't need to call `dispose()` in most cases - Nitro Modules will automatically clean up when the session is no longer referenced.
+You don't need to call `dispose()` in most cases — Nitro Modules will automatically clean up when the session is no longer referenced.
 
 ## API Reference
 
-### `ort.getVersion()`
-
-Returns the ONNX Runtime version string.
-
-```typescript
-const version = ort.getVersion();
-console.log('ONNX Runtime version:', version);
-```
-
-### `ort.loadModel(source, options?)`
+### `createModelLoader(source, options?)`
 
 Load an ONNX model from various sources.
 
 **Parameters:**
-- `source`: `string` | `number` | `{ url: string }` - Model source:
-  - `string`: File path on device
-  - `number`: `require()` asset (automatically copied to files directory)
-  - `{ url: string }`: URL to download from (automatically cached)
-- `options`: `SessionOptions` (optional) - Configuration options
+
+- `source`: `ModelSource` — The model source:
+  - `number`: `require()` asset (auto-resolved for debug/release)
+  - `{ filePath: string }`: Absolute file path on disk
+  - `{ url: string }`: URL to download from (cached)
+  - `{ resource: string }`: Platform bundle resource name
+- `options`: `SessionOptions` (optional) — Configuration options
 
 **Returns:** `Promise<InferenceSession>`
 
-**Example:**
-```typescript
-// From bundled asset
-const session1 = await ort.loadModel(require('./model.onnx'));
-
-// From file path
-const session2 = await ort.loadModel('/data/user/model.onnx');
-
-// From URL
-const session3 = await ort.loadModel({ url: 'https://example.com/model.onnx' });
-```
-
-### `ort.loadModelFromBuffer(buffer, options?)`
-
-Load an ONNX model from an ArrayBuffer.
-
-**Parameters:**
-- `buffer`: `ArrayBuffer` - Model data
-- `options`: `SessionOptions` (optional) - Configuration options
-
-**Returns:** `Promise<InferenceSession>`
-
-### `copyFile(source)`
-
-Manually copy a model file from a bundled asset or URL to the device's file system. This is useful if you want to copy the file before loading it.
-
-**Parameters:**
-- `source`: `number` | `{ url: string }` - Model source to copy
-
-**Returns:** `Promise<string>` - Path to the copied file
-
-**Example:**
-```typescript
-// Copy bundled asset
-const modelPath = await copyFile(require('./model.onnx'));
-console.log('Model copied to:', modelPath);
-
-// Now you can load it
-const session = await ort.loadModel(modelPath);
-
-// Or copy from URL
-const urlPath = await copyFile({ url: 'https://example.com/model.onnx' });
-const session2 = await ort.loadModel(urlPath);
-```
-
-**Note:** `loadModel()` calls this automatically when you pass a `require()` or `{ url }`, so you typically don't need to call this manually.
-
-### `useLoadModel(source, options?)`
+### `useModelLoader(source, options?)`
 
 React hook for loading models with state management.
 
 **Parameters:**
-- `source`: Same as `loadModel()`
+
+- `source`: `ModelSource`
 - `options`: `SessionOptions` (optional)
 
-**Returns:** `OnnxRuntimePlugin`
+**Returns:**
+
 ```typescript
-type OnnxRuntimePlugin = 
-  | { model: InferenceSession; state: 'loaded' }
-  | { model: undefined; state: 'loading' }
-  | { model: undefined; state: 'error'; error: Error };
+type Result =
+  | { state: 'loading'; model: undefined; error: undefined }
+  | { state: 'ready'; model: InferenceSession; error: undefined }
+  | { state: 'error'; model: undefined; error: Error };
+```
+
+### `OnnxRuntimes`
+
+The underlying ONNX Runtime native module, exposed for advanced use cases.
+
+```typescript
+OnnxRuntimes.getVersion(): string;
+OnnxRuntimes.loadModel(path: string, options?: SessionOptions): Promise<InferenceSession>;
+OnnxRuntimes.loadModelFromBuffer(buffer: ArrayBuffer, options?: SessionOptions): Promise<InferenceSession>;
 ```
 
 ### `InferenceSession`
 
-#### `session.inputNames`
+#### `session.inputNames` / `session.outputNames`
 
-Array of input tensor information:
+Arrays of tensor metadata:
+
 ```typescript
 type Tensor = {
   name: string;
-  dims: number[];  // Shape, negative values indicate dynamic dimensions
-  type: string;    // 'float32', 'int64', etc.
+  dims: number[]; // Shape, negative values indicate dynamic dimensions
+  type: string; // 'float32', 'int64', etc.
 };
 ```
 
-#### `session.outputNames`
-
-Array of output tensor information (same format as `inputNames`).
-
 #### `session.run(feeds)`
 
-Run inference with the given inputs.
+Run synchronous inference.
 
-**Parameters:**
-- `feeds`: `Record<string, ArrayBuffer>` - Map of input names to ArrayBuffers
+- `feeds`: `Record<string, ArrayBuffer>` — Map of input names to ArrayBuffers
+- **Returns:** `Record<string, ArrayBuffer>`
 
-**Returns:** `Promise<Record<string, ArrayBuffer>>` - Map of output names to ArrayBuffers
+#### `session.runAsync(feeds)`
+
+Run async inference.
+
+- `feeds`: `Record<string, ArrayBuffer>`
+- **Returns:** `Promise<Record<string, ArrayBuffer>>`
 
 #### `session.dispose()`
 
 Manually free the session and release resources immediately.
 
-**Note:** This is optional - sessions are automatically cleaned up by Nitro Modules when they go out of scope. Only call this if you need immediate memory cleanup.
+### `ModelSource`
+
+```typescript
+type ModelSource =
+  | number // require('model.onnx')
+  | { filePath: string } // absolute path
+  | { url: string } // download URL
+  | { resource: string }; // bundle resource
+```
 
 ### `SessionOptions`
 
@@ -379,8 +323,8 @@ type ProviderOptions = {
 
 ## Supported Platforms
 
-- ✅ Android (API 21+)
-- ✅ iOS (13.0+)
+- Android (API 21+)
+- iOS (13.0+)
 
 ## Supported Data Types
 
@@ -400,31 +344,6 @@ type ProviderOptions = {
 3. **Enable Graph Optimization**: Use `graphOptimizationLevel: 'all'` for production
 4. **Reuse Sessions**: Create the session once and reuse it for multiple inferences
 5. **Use FP16**: Enable `useFP16` on NNAPI for faster inference with acceptable accuracy loss
-
-## Exports
-
-The library exports the following:
-
-```typescript
-import ort, { useLoadModel, copyFile } from 'react-native-nitro-onnxruntime';
-
-// Using default export object
-const session = await ort.loadModel(require('./model.onnx'));
-const session2 = await ort.loadModelFromBuffer(arrayBuffer);
-
-// Or using destructured methods
-const { loadModel, loadModelFromBuffer } = ort;
-const session3 = await loadModel(require('./model.onnx'));
-
-// Utility functions
-const modelPath = await copyFile(require('./model.onnx'));
-
-// React hook
-function MyComponent() {
-  const modelState = useLoadModel(require('./model.onnx'));
-  // ...
-}
-```
 
 ## Example App
 

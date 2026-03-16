@@ -14,9 +14,9 @@
     "InferenceSession": {
       "cpp": "InferenceSession"
     },
-    "AssetManager": {
-      "swift": "AssetManager",
-      "kotlin": "AssetManager"
+    "ModelLoaderFactory": {
+      "swift": "ModelLoaderFactory",
+      "kotlin": "ModelLoaderFactory"
     }
   },
   "ignorePaths": ["node_modules"]
