@@ -1,4 +1,4 @@
-package com.nitroonnxruntime
+package com.margelo.nitro.nitroonnxruntime
 
 import com.facebook.react.TurboReactPackage
 import com.facebook.react.bridge.NativeModule

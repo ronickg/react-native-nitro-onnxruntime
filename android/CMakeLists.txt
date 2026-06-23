@@ -32,3 +32,11 @@ target_link_libraries(
         android # <-- Android core
         onnxruntime
 )
+
+# 16 KB page-size support (required for Android 15+ / devices with 16 KB pages).
+# Align the shared library's LOAD segments to 16 KB so it loads on 16 KB-page devices.
+# Works on any NDK; NDK r28+ defaults to this, older NDKs need the explicit flag.
+target_link_options(${PACKAGE_NAME} PRIVATE
+        "-Wl,-z,max-page-size=16384"
+        "-Wl,-z,common-page-size=16384"
+)
