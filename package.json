@@ -1,6 +1,6 @@
 {
   "name": "react-native-nitro-onnxruntime",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "High-performance ONNX Runtime bindings for React Native with hardware acceleration support (NNAPI, CoreML, XNNPACK)",
   "source": "./src/index.ts",
   "main": "./lib/commonjs/index.js",
